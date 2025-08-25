@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "990633823805",
+    "project_id": "notessyncapp-a8ffe",
+    "storage_bucket": "notessyncapp-a8ffe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:990633823805:android:07947115945cf2e4882454",
+        "android_client_info": {
+          "package_name": "com.example.notessyncapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "990633823805-pk55d9qjgu7l6k3k0qakmmmc1qe0u4ir.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.notessyncapp",
+            "certificate_hash": "0935c47d8b986a63b42f82bd481eaf38cefea84b"
+          }
+        },
+        {
+          "client_id": "990633823805-oq93eag6n0o9hk3o4k7ak5j5u15drl5j.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBxg8eJ2knODpY1FJ997Fs3jw1cn90fFCo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "990633823805-oq93eag6n0o9hk3o4k7ak5j5u15drl5j.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

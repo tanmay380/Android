@@ -43,7 +43,7 @@ fun WeatherSplashScreen(navController: NavController) {
                 })
         )
         delay(1000L)
-        navController.navigate(WeatherScreens.MainScreen.name)
+        navController.navigate(WeatherScreens.MainScreen.name+"/New Delhi")
     })
 
 

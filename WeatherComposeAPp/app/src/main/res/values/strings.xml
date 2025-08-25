@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">WeatherComposeAPp</string>
+    <string name="about_app">Weather App v1.0.0</string>
 </resources>
