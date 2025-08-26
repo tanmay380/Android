@@ -25,11 +25,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {
@@ -63,8 +65,6 @@ dependencies {
     implementation(libs.androidx.credentials)
     implementation(libs.androidx.credentials.play.services.auth)
     implementation(libs.googleid)
-    implementation(libs.play.services.auth)
-    implementation(libs.converter.gson)
     implementation(libs.androidx.lifecycle.viewmodel.savedstate)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

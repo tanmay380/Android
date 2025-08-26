@@ -90,6 +90,7 @@ fun AddNotes(
                     notes.id = id?: notes.id
                     viewModel.updateNotes(notes)
                 }
+                navController.navigateUp()
             }) {
                 Text(text = "Save")
             }

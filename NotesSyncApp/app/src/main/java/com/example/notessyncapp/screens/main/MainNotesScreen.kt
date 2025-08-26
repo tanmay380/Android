@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -29,6 +30,9 @@ import androidx.navigation.NavController
 import com.example.notessyncapp.model.Notes
 import com.example.notessyncapp.navigation.AddNotesScreenClass
 import com.example.notessyncapp.navigation.NotesNavigationScreens
+import com.google.firebase.Firebase
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 val TAG = "tanmay"
 
@@ -44,35 +48,47 @@ fun MainNotesScreen(
         }) {
             Text(text = "Add")
         }
-    }) {
+    }) {Column {
         val list = viewModel.notesList.collectAsState().value
+        Log.d(TAG, "MainNotesScreen: $list")
+        Button(modifier = Modifier.padding(it), onClick = {
+            FirebaseAuth.getInstance().signOut()
+        }) {
+            Text("Sign Out")
+        }
         LazyColumn(
             verticalArrangement = Arrangement.Top,
             horizontalAlignment = Alignment.Start,
-            modifier = Modifier.padding(it)
+            modifier = Modifier
+                .padding(it)
                 .fillMaxSize()
         ) {
 
             items(list) {
-                Surface(modifier = Modifier.padding(10.dp)
-                    .clickable(onClick = {
+                Surface(
+                    modifier = Modifier
+                        .padding(10.dp)
+                        .clickable(onClick = {
 //                        navController.navigate(NotesNavigationScreens.ADD_NOTES.name)
-                        navController.navigate(AddNotesScreenClass(it.id.toString()))
-                    })
+                            navController.navigate(AddNotesScreenClass(it.id.toString()))
+                        })
 
-                    .fillMaxWidth(),
+                        .fillMaxWidth(),
                     shape = RoundedCornerShape(4.dp),
                     color = Color.LightGray
                 ) {
                     Column {
-                        Text(it.title, style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold)
+                        Text(
+                            it.title, style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
+                        )
                         Text(it.description, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
             }
 
         }
+    }
 
     }
 }

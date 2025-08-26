@@ -19,3 +19,12 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep the Notes class and its members for Firestore deserialization
+-keep class com.example.notessyncapp.model.Notes { <init>(); *; }
+
+# Keep the NotesFB class and its members for Firestore deserialization
+-keep class com.example.notessyncapp.model.NotesFB { <init>(); *; }
+
+# Keep annotations, which can be useful for some libraries
+-keepattributes *Annotation*

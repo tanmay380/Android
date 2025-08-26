@@ -68,17 +68,20 @@ class AddNoteViewModel @Inject constructor(
             Log.d("tanmay", "emtoy: estring not ${noteId.value}")
             viewModelScope.launch {
                 notesRepository.getNotesByID(noteId.value!!).collect {
+                    Log.d(TAG, "updatinh: ")
                     _updateNotes.value = it
                     _titleState.value = it?.title ?: ""
                     _decriptionState.value = it?.description ?: ""
                     _isUpdating.value = true
+
+                    Log.d(TAG, "title: it")
                 }
             }
             Log.d(TAG, "update stare: ${_updateNotes.value}")
             notesRepository.notesRef = db.collection("notes").document(noteId.value!!)
 
             Log.d("tanmay", "value of init nore id: ${noteId.value} ${notesRepository.noteId}")
-            notesRepository.listenToRemoteUpdate()
+            notesRepository.listenToRemoteUpdateFromNotesAdd()
 
 //                _noteId.value?.let {
 //                    viewModelScope.launch {
@@ -120,7 +123,7 @@ class AddNoteViewModel @Inject constructor(
         updateNotestoFirebase(notes)
     }
 
-    private fun updateNotestoFirebase(notes: Notes) {
+    private fun  updateNotestoFirebase(notes: Notes) {
 
         db.collection("notes")
             .document(notes.id)
@@ -141,7 +144,7 @@ class AddNoteViewModel @Inject constructor(
                 Log.d("tanmay", "saveNotesToFirebase: ${documentReference}  ")
 
                 notesRepository.notesRef = db.collection("notes").document(notes.id)
-                notesRepository.listenToRemoteUpdate()
+//                notesRepository.listenToRemoteUpdate()
 //                dbCollection.document(docId)
 //                    .update(hashMapOf("id" to docId) as Map<String, Any>)
 //                    .addOnCompleteListener {
@@ -173,10 +176,10 @@ class AddNoteViewModel @Inject constructor(
         saveJob = viewModelScope.launch {
             delay(500)
             if (noteId == null) {
-                val newNote = Notes(title = title, description = description)
+                val newNote = Notes(title = _titleState.value, description = _decriptionState.value)
                 saveNotes(newNote)
             } else {
-                val updateNote = Notes(id = noteId, title = title, description = description)
+                val updateNote = Notes(id = noteId, title = _titleState.value, description = _decriptionState.value)
                 updateNotes(updateNote)
             }
             Log.d("tanmay", "autoSave: working $noteId")
