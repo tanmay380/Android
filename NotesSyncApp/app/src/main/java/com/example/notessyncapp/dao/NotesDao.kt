@@ -17,7 +17,7 @@ interface NotesDao {
     fun getNoteById(id: String): Flow<Notes?>
 
     @Query("Delete from notes_table where id = :id")
-    suspend fun deleteNoteById(id: Int)
+    suspend fun deleteNoteById(id: String)
 
     @Query("Delete from notes_table")
     suspend fun deleteAllNotes()

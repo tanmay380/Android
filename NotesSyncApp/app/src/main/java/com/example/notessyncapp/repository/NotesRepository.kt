@@ -5,6 +5,7 @@ import androidx.room.Upsert
 import com.example.notessyncapp.dao.NotesDao
 import com.example.notessyncapp.model.Notes
 import com.example.notessyncapp.screens.main.TAG
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentChange
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
@@ -21,15 +22,16 @@ class NotesRepository(
 ) {
 
     var notesRef: DocumentReference? =
-        if (noteId.isNotEmpty()) firestore.collection("notes")
-            .document(noteId)
+        if (noteId.isNotEmpty()) firestore.collection("users")
+            .document(FirebaseAuth.getInstance().currentUser!!.uid)
+            .collection("notes").document(noteId)
         else null
 
     fun getAllNotes() = notesDao.getAllNotes()
 
     fun getNotesByID(id: String): Flow<Notes?> = notesDao.getNoteById(id)
 
-    suspend fun deleteNotesByID(id: Int) = notesDao.deleteNoteById(id)
+    suspend fun deleteNotesByID(id: String) = notesDao.deleteNoteById(id)
 
     suspend fun deleteAllNotes() = notesDao.deleteAllNotes()
 
@@ -40,6 +42,41 @@ class NotesRepository(
 
     @Upsert
     suspend fun insertOrUpdate(notes: Notes) = notesDao.insertOrUpdate(notes)
+
+    fun saveNotesToFirebase(notes: Notes) {
+
+        val dbCollection = firestore.collection("users").document(
+            FirebaseAuth.getInstance()
+                .currentUser!!.uid
+        ).collection("notes")
+            .document(notes.id)
+
+//
+        dbCollection.set(notes)
+            .addOnSuccessListener { documentReference ->
+                Log.d("tanmay", "saveNotesToFirebase: ${documentReference}  ")
+
+                notesRef = dbCollection.collection("users").document(
+                    FirebaseAuth.getInstance()
+                        .currentUser!!.uid
+                ).collection("notes")
+                    .document(notes.id)
+
+            }
+    }
+
+    fun updateNotestoFirebase(notes: Notes) {
+
+        firestore.collection("users").document(
+            FirebaseAuth.getInstance()
+                .currentUser!!.uid
+        ).collection("notes")
+            .document(notes.id)
+            .set(notes).addOnSuccessListener {
+                Log.d("tanmay", "updateNotestoFirebase: update the notes, pleaes check")
+            }
+
+    }
 
     fun listenToRemoteUpdateFromNotesAdd() {
         Log.d(TAG, "listenToRemoteUpdate: ${notesRef}  ")
@@ -72,7 +109,9 @@ class NotesRepository(
     }
 
     fun listenToRemoteUpdateFromMainScreen() {
-        val colectionRef = firestore.collection("notes")
+        val colectionRef = firestore.collection("users")
+            .document(FirebaseAuth.getInstance().currentUser!!.uid)
+            .collection("notes")
         colectionRef.addSnapshotListener { r, e ->
 //            Log.d(TAG, "listenToRemoteUpdateFromMainScreen: $r   $e")
             if (e != null) return@addSnapshotListener
@@ -97,7 +136,12 @@ class NotesRepository(
                             }
                         }
 
-                        DocumentChange.Type.REMOVED -> TODO()
+                        DocumentChange.Type.REMOVED -> {
+                            CoroutineScope(Dispatchers.IO).launch {
+
+                                deleteNotesByID(noteId)
+                            }
+                        }
                     }
                 }
 

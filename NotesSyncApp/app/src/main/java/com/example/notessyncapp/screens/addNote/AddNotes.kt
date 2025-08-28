@@ -63,11 +63,11 @@ fun AddNotes(
                 onTextChange = {
                     Log.d("tanmay", "AddNotes: $id")
                     viewModel.setTitle(it)
-                    viewModel.autoSave( id, title, description)
+                    viewModel.autoSave( id, it, description)
                 })
             InputText(text = description, label = "Notes", onTextChange = {
                 viewModel.setDescription(it)
-                viewModel.autoSave(id, title, description)
+                viewModel.autoSave(id, title, it)
             })
             Button(modifier = Modifier.padding(5.dp), onClick = {
                 Log.d("tanmay", "update bnotes value: $updateNotes")

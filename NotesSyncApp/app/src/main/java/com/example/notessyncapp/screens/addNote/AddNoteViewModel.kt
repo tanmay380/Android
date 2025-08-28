@@ -106,12 +106,8 @@ class AddNoteViewModel @Inject constructor(
         _noteId.value = notes.id
         notesRepository.noteId = _noteId.value.toString()
         Log.d("tanmay", "saveNotes: $id")
-        saveNotesToFirebase(notes)
+        notesRepository.saveNotesToFirebase(notes)
 
-    }
-
-    fun getNotesByID(id: String): Flow<Notes?> {
-        return notesRepository.getNotesByID(id)
     }
 
     fun updateNotes(notes: Notes) = viewModelScope.launch {
@@ -120,51 +116,9 @@ class AddNoteViewModel @Inject constructor(
             notes.id.toString()!!, notes.title, notes.description,
             notes.entryTime.time
         )
-        updateNotestoFirebase(notes)
+        notesRepository.updateNotestoFirebase(notes)
     }
 
-    private fun  updateNotestoFirebase(notes: Notes) {
-
-        db.collection("notes")
-            .document(notes.id)
-            .set(notes).addOnSuccessListener {
-                Log.d("tanmay", "updateNotestoFirebase: update the notes, pleaes check")
-            }
-
-    }
-
-    fun saveNotesToFirebase(notes: Notes) {
-        FirebaseAuth.getInstance().currentUser!!.uid.toString()
-
-        val dbCollection = db.collection("notes").document(notes.id.toString())
-
-//
-        dbCollection.set(notes)
-            .addOnSuccessListener { documentReference ->
-                Log.d("tanmay", "saveNotesToFirebase: ${documentReference}  ")
-
-                notesRepository.notesRef = db.collection("notes").document(notes.id)
-//                notesRepository.listenToRemoteUpdate()
-//                dbCollection.document(docId)
-//                    .update(hashMapOf("id" to docId) as Map<String, Any>)
-//                    .addOnCompleteListener {
-//                        if (it.isSuccessful){
-//                            Log.d("tanmay", "saveNotesToFirebase: Successfully updated")
-//                        }
-//                    }
-
-            }
-    }
-
-    fun onNoteChnaged(
-        noteId: String,
-        content: String
-    ) {
-//        val updateNotes = Notes(
-//            id = noteId,
-//            description = content
-//        )
-    }
 
     private var saveJob: Job? = null
     fun autoSave(
@@ -176,10 +130,12 @@ class AddNoteViewModel @Inject constructor(
         saveJob = viewModelScope.launch {
             delay(500)
             if (noteId == null) {
-                val newNote = Notes(title = _titleState.value, description = _decriptionState.value)
+                val newNote = Notes(title = title, description = description)
+//                val newNote = Notes(title = _titleState.value, description = _decriptionState.value)
                 saveNotes(newNote)
             } else {
-                val updateNote = Notes(id = noteId, title = _titleState.value, description = _decriptionState.value)
+                val updateNote = Notes(id = noteId, title = title, description = description)
+//                val updateNote = Notes(id = noteId, title = _titleState.value, description = _decriptionState.value)
                 updateNotes(updateNote)
             }
             Log.d("tanmay", "autoSave: working $noteId")

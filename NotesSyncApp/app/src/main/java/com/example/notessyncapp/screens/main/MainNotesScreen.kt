@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.FloatingActionButton
@@ -50,15 +53,16 @@ fun MainNotesScreen(
         }
     }) {Column {
         val list = viewModel.notesList.collectAsState().value
-        Log.d(TAG, "MainNotesScreen: $list")
+//        Log.d(TAG, "MainNotesScreen: $list")
         Button(modifier = Modifier.padding(it), onClick = {
             FirebaseAuth.getInstance().signOut()
+            viewModel.deleteAllNotes()
+            navController.navigate(NotesNavigationScreens.LOGINSIGNUPSCREEN.name)
         }) {
             Text("Sign Out")
         }
-        LazyColumn(
-            verticalArrangement = Arrangement.Top,
-            horizontalAlignment = Alignment.Start,
+        LazyVerticalStaggeredGrid(
+            columns = StaggeredGridCells.Fixed(2),
             modifier = Modifier
                 .padding(it)
                 .fillMaxSize()
@@ -91,21 +95,4 @@ fun MainNotesScreen(
     }
 
     }
-}
-
-val notesDummtList: List<Notes> = listOf(
-    Notes(title = "Hello", description = "Hello Tanmay"),
-    Notes(title = "Hello", description = "Hello Tanmay"),
-    Notes(title = "Hello", description = "Hello Tanmay"),
-    Notes(title = "Hello", description = "Hello Tanmay"),
-
-)
-
-@Preview
-@Composable
-private fun NotesDisplayRow(
-    values: PaddingValues = PaddingValues(0.dp),
-    viewModel: MainNotesViewModel
-) {
-
 }
