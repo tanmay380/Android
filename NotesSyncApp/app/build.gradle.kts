@@ -15,7 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.notessyncapp"
-        minSdk = 35
+        minSdk = 32
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
