@@ -1,16 +1,25 @@
 package com.example.geotracker.screen
 
-import android.content.Context
 import android.location.Location
 import android.util.Log
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.geotracker.components.SessionSummary
+import com.example.geotracker.helper.LocationProvider
 import com.example.geotracker.model.LocationEntity
 import com.example.geotracker.repository.LocationRepository
 import com.google.android.gms.maps.model.LatLng
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 data class TrackingUiState(
     val currentLatLng: LatLng = LatLng(0.0, 0.0),
@@ -22,62 +31,95 @@ data class TrackingUiState(
     val sessionStartMs: Long = 0L
 )
 
-
-class TrackingViewModel(
+@HiltViewModel
+class TrackingViewModel @Inject constructor(
     private val repo: LocationRepository,
-    private val context: Context
+    private val locationProvider: LocationProvider,
+    private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TrackingUiState())
     val uiState: StateFlow<TrackingUiState> = _uiState
-    val uiStatePermission: Boolean = _uiState.value.locationPermissionGranted
+
+    val sessionSummary: StateFlow<List<SessionSummary>> =
+        repo.getAllSessionSummariesFlow().map {
+            it
+        }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+
+    var _isServiceStarted = MutableStateFlow(false)
+    var isServiceStarted: StateFlow<Boolean> = _isServiceStarted.asStateFlow()
 
     private var totalDistance = 0.0
     private var lastLatLng: LatLng? = null
-    private val sessionId = System.currentTimeMillis()
-    private val sessionStartMs: Long = System.currentTimeMillis()
 
+    private var _sessionId = MutableStateFlow<Long?>(savedStateHandle["sessionId"])
+    var sessionId: StateFlow<Long?> = _sessionId.asStateFlow()
 
-    //    private val receiver = object : BroadcastReceiver() {
-//        override fun onReceive(ctx: Context?, intent: Intent?) {
-//            val lat = intent?.getDoubleExtra("lat", 0.0) ?: return
-//            val lng = intent.getDoubleExtra("lng", 0.0)
-//            val speed = intent.getFloatExtra("speed", 0f)
-//            val time = intent.getLongExtra("time", System.currentTimeMillis())
-//
-//            val entity = LocationEntity(
-//                sessionId = sessionId,
-//                lat = lat,
-//                lng = lng,
-//                speed = speed,
-//                timestamp = time
-//            )
-////            Log.d("tanmay", "onReceive: ")
-//            addLocation(entity)
-//        }
-//    }
-//
-//    init {
-//        context.registerReceiver(receiver, IntentFilter("LOCATION_UPDATE"),
-//            Context.RECEIVER_EXPORTED)
-//    }
-    init {
-        _uiState.value = _uiState.value.copy(sessionStartMs = sessionStartMs)
+    fun setSessionId(id: Long?) {
+        _sessionId.value = id
+        _isServiceStarted.value = true
     }
 
-    fun onPermissionResult(isGranted: Boolean) {
-        Log.d("tanmay", "onPermissionResult: value is $isGranted")
-        _uiState.value = _uiState.value.copy(locationPermissionGranted = isGranted)
+    fun setServiceStarted(value: Boolean) {
+        _isServiceStarted.value = value
     }
 
-    fun getLocationAndMakePath(){
-        repo.getSessionLocations(sessionStartMs)
+    fun openSession(sId: Long) {
+        viewModelScope.launch {
+            openSessionBySessionId(sId)
+        }
+
+    }
+
+    // backing mutable + public read-only selection flow
+    private val _selectedSessionId = MutableStateFlow<Set<Long?>>(emptySet())
+    val selectedSessionId: StateFlow<Set<Long?>> = _selectedSessionId.asStateFlow()
+
+    /** Toggle selection: select id if not selected, otherwise clear selection. */
+    fun toggleSessionSelection(sessionId: Long) {
+        val current = _selectedSessionId.value.toMutableSet()
+        if (current.contains(sessionId)) current.remove(sessionId) else current.add(sessionId)
+        _selectedSessionId.value = current.toSet()
+    }
+
+    /** Optional helper to explicitly select (useful when opening session programmatically). */
+
+    /** Optional helper to clear selection */
+    fun clearSelection() {
+        _selectedSessionId.value = emptySet()
+    }
+
+
+    fun createSessionIfAbsent() {
+        if (_sessionId.value == null) {
+            val id = System.currentTimeMillis()
+            _sessionId.value = id
+            savedStateHandle["sessionId"] = id
+            _uiState.value = _uiState.value.copy(sessionStartMs = id)
+        }
+        clearSelection()
+        _uiState.value = TrackingUiState()
+
+        Log.d("tanmay", "createSessionIfAbsent: ${sessionId.value}")
+    }
+
+    fun startGettingLocation() {
+        locationProvider.startUpdates()
+        viewModelScope.launch {
+            locationProvider.locFlow.collect {
+                _uiState.value = _uiState.value.copy(
+                    currentLatLng = LatLng(it.latitude, it.longitude)
+                )
+            }
+        }
     }
 
     fun handleNewLocation(entity: Location) {
-        Log.d("tanmay", "handleNewLocation: ")
+        locationProvider.stopUpdates()
+//        Log.d("tanmay", "handleNewLocation: ")
         val location = LocationEntity(
-            sessionId = sessionId,
+            sessionId = sessionId.value!!.toLong(),
             lat = entity.latitude,
             lng = entity.longitude,
             speed = entity.speed,
@@ -85,7 +127,7 @@ class TrackingViewModel(
         )
 
         viewModelScope.launch {
-            repo.insert(location)
+//            repo.insert(location)
 
             val newLL = LatLng(location.lat, location.lng)
             lastLatLng?.let { prev ->
@@ -102,7 +144,7 @@ class TrackingViewModel(
             }
             lastLatLng = newLL
 
-            val elapsedHrs = (location.timestamp - sessionId) / 1000.0 / 3600.0
+            val elapsedHrs = (location.timestamp - sessionId.value!!.toLong()) / 1000.0 / 3600.0
             _uiState.value = _uiState.value.copy(
                 currentLatLng = newLL,
                 routePoints = _uiState.value.routePoints + newLL,
@@ -116,60 +158,38 @@ class TrackingViewModel(
 
     }
 
-//
-//    fun addLocation(entity: LocationEntity) {
-//        viewModelScope.launch {
-//            repo.insert(entity)
-//
-//            val newLatLng = LatLng(entity.lat, entity.lng)
-//
-//            lastLatLng?.let {
-//                val results = FloatArray(1)
-//                android.location.Location("").apply {
-//                    latitude = it.latitude
-//                    longitude = it.longitude
-//                }.distanceTo(
-//                    android.location.Location("").apply {
-//                        latitude = newLatLng.latitude
-//                        longitude = newLatLng.longitude
-//                    }
-//                ).also { d -> totalDistance += d }
-//            }
-//            lastLatLng = newLatLng
-//
-//            val elapsedHours = (entity.timestamp - sessionId) / 1000.0 / 3600.0
-//
-//            _uiState.value = _uiState.value.copy(
-//                currentLatLng = newLatLng,
-//                routePoints = _uiState.value.routePoints + newLatLng,
-//                distance = totalDistance / 1000,
-//                speed = entity.speed * 3.6,
-//                avgSpeed = if (elapsedHours > 0) (totalDistance / 1000) / elapsedHours else 0.0
-//            )
-//        }
-//    }
-
 
     override fun onCleared() {
         super.onCleared()
     }
 
-    fun openSession(sid: Long) {
-
+    fun openSessionBySessionId(sid: Long) {
         val locations = repo.getSessionLocations(sid)
-        Log.d("tanmay", "openSession: $locations")
         viewModelScope.launch {
-            locations.collect {
-                Log.d("tanmay", "openSession: $it")
-                it.forEach {
-                    _uiState.value = _uiState.value.copy(
-                        routePoints = _uiState.value.routePoints + LatLng(it.lat, it.lng)
-                    )
-                }
+            Log.d("tanmay", "openSession: ${locations.first().size}")
+            locations.first().forEach {
+                _uiState.value = _uiState.value.copy(
+                    routePoints = _uiState.value.routePoints + LatLng(it.lat, it.lng)
+                )
             }
         }
+    }
+    fun clearRouteBySessionId(sId : Long){
+        val locations = repo.getSessionLocations(sId)
+        viewModelScope.launch {
+            Log.d("tanmay", "openSession: ${locations.first().size}")
+            locations.first().forEach {
+                _uiState.value = _uiState.value.copy(
+                    routePoints = _uiState.value.routePoints - LatLng(it.lat, it.lng)
+                )
+            }
+        }
+    }
 
-
+    fun sessionStopped() {
+        _uiState.value = _uiState.value.copy(
+            sessionStartMs = 0
+        )
     }
 
 }

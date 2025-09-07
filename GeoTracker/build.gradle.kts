@@ -3,4 +3,7 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.kotlin.android) apply false
     alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.hilt.android.gradle.plugin) apply false // Added Hilt plugin
+    alias(libs.plugins.ksp) apply false // Added KSP for Room
+    alias(libs.plugins.kotlin.kapt) apply false // Added KAPT for Hilt
 }

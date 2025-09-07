@@ -2,7 +2,9 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.ksp)
+    alias(libs.plugins.ksp) // For Room
+    alias(libs.plugins.kotlin.kapt) // For Hilt
+    alias(libs.plugins.hilt.android.gradle.plugin)
 }
 
 android {
@@ -51,7 +53,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.play.services.location)
-    ksp(libs.androidx.room.compiler)
+    ksp(libs.androidx.room.compiler) // Room uses KSP
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -65,5 +67,12 @@ dependencies {
     // Android Maps Compose composables for the Maps SDK for Android
     implementation("com.google.maps.android:maps-compose:6.7.1")
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
+
+    // Hilt dependencies
+    implementation(libs.hilt.android)
+    kapt(libs.hilt.compiler) // Hilt now uses KAPT
+
+    implementation("androidx.compose.material:material-icons-extended-android:1.7.8")
+    implementation("androidx.compose.material3:material3-window-size-class:1.3.2")
 
 }

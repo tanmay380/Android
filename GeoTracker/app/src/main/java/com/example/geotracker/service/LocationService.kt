@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
@@ -18,9 +19,16 @@ import androidx.core.app.ActivityCompat
 import com.example.geotracker.MainActivity
 import com.example.geotracker.R
 import com.example.geotracker.model.LocationEntity
+import com.example.geotracker.repository.LocationRepository
 import com.example.geotracker.utils.Utils
-import com.google.android.gms.location.*
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import com.google.android.gms.tasks.CancellationTokenSource
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,11 +36,19 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import javax.inject.Inject
+import androidx.core.content.edit
+import com.example.geotracker.utils.Constants.PREFS
+import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
 
+@AndroidEntryPoint
 class LocationService : Service() {
+
+
+    @Inject
+    lateinit var repo: LocationRepository
+
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    // private val _locationUpdates = MutableSharedFlow<LocationResult>() // Commented out old flow
-    // val locationFlow: SharedFlow<LocationResult> = _locationUpdates // Commented out old flow
 
     // New Flow for LocationEntity
     private val _locationEntityFlow = MutableSharedFlow<Location>()
@@ -42,18 +58,18 @@ class LocationService : Service() {
     private val serviceJob = SupervisorJob()
     private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
 
-    private var currentSessionId: Long =
-        System.currentTimeMillis() // To store sessionId from intent
+    private var currentSessionId: Long? = null // To store sessionId from intent
 
     // Binder given to clients
     private val binder = LocalBinder() // Added Binder
+
 
     // Inner class for the Binder
     inner class LocalBinder : Binder() {
 
         fun getService(): LocationService {
             Log.d("tanmay", "getService: ")
-             return this@LocationService
+            return this@LocationService
         }
     }
 
@@ -63,17 +79,10 @@ class LocationService : Service() {
 
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
-        Log.d("Tanmay", "onCreate: service $currentSessionId")
-        // Notification text will be updated once session ID is known
-        startForeground(1, createNotification("Initializing..."))
-        // startLocationUpdates() // Will be called after sessionId is set
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        currentSessionId = intent?.getLongExtra("SESSION_ID", System.currentTimeMillis())!!
-        Log.d("LocationService", "Session ID received: $currentSessionId")
-//        startLocationUpdates() // Start updates once session ID is available
-//        updateNotification("Tracking active. Session: $currentSessionId")
+        Log.d("tanmay", "Session ID received: $currentSessionId")
         return START_STICKY // Or START_NOT_STICKY / START_REDELIVER_INTENT depending on needs
     }
 
@@ -95,7 +104,7 @@ class LocationService : Service() {
         }
     }
 
-    fun startLocationUpdates() {
+    fun startLocationUpdates(currenid: Long) {
         if (currentSessionId == 0L) {
             Log.e("LocationService", "Session ID not set. Cannot start location updates.")
             return
@@ -116,6 +125,12 @@ class LocationService : Service() {
             // TODO: Consider how to handle this case. Maybe stopSelf()?
             return
         }
+        startForeground(1, createNotification("Initializing..."))
+        currentSessionId = currenid
+        applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit {
+                putLong(PREF_ACTIVE_SESSION, currentSessionId!!)
+            }
         fusedLocationClient.requestLocationUpdates(
             request,
             locationCallback,
@@ -130,28 +145,22 @@ class LocationService : Service() {
             val loc = result.lastLocation ?: return
 
             val entity = LocationEntity(
-                sessionId = currentSessionId, // Use the stored sessionId
+                sessionId = currentSessionId!!, // Use the stored sessionId
                 lat = loc.latitude,
                 lng = loc.longitude,
                 speed = loc.speed,
                 timestamp = loc.time
             )
+            println("service is ruunign")
 
             serviceScope.launch { // Launch coroutine to emit to the flow
+//                Log.d("tanmay", "onLocationResult: $repo")
+                repo?.insert(entity)
                 _locationEntityFlow.emit(loc)
             }
 
-            // Commented out Broadcast location
-            // val intent = Intent("LOCATION_UPDATE")
-            // intent.putExtra("lat", loc.latitude)
-            // intent.putExtra("lng", loc.longitude)
-            // intent.putExtra("speed", loc.speed)
-            // intent.putExtra("time", loc.time)
-            // Log.d("tanmay", "onLocationResult: ${loc.longitude} , ${loc.latitude}")
-            // sendBroadcast(intent)
-
             updateNotification(
-                "Speed: %.1f km/h      ${Utils.formatDuration(System.currentTimeMillis() - currentSessionId)}".format(
+                "Speed: %.1f km/h      ${Utils.formatDuration(System.currentTimeMillis() - currentSessionId!!)}".format(
                     loc.speed * 3.6
                 )
             )
@@ -159,7 +168,7 @@ class LocationService : Service() {
     }
 
     private fun createNotification(text: String): Notification {
-        Log.d("tanmay", "createNotification: $currentSessionId")
+//        Log.d("tanmay", "createNotification: $currentSessionId")
         val intent =
             Intent(this, MainActivity::class.java).apply { // Assuming MainActivity is your main UI
                 flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -183,7 +192,6 @@ class LocationService : Service() {
     }
 
     private fun createNotificationChannel() {
-        Log.d("tanmay", "createNotificationChannel: $currentSessionId")
         val channel =
             NotificationChannel("geo_tracker", "Geo Tracker", NotificationManager.IMPORTANCE_LOW)
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -192,19 +200,27 @@ class LocationService : Service() {
 
     // Return the binder for IPC
     override fun onBind(intent: Intent?): IBinder? {
-        Log.d("LocationService", "Service bound")
+        Log.d("tanmay", "Service bound")
         return binder
     }
 
     override fun onUnbind(intent: Intent?): Boolean {
-        Log.d("LocationService", "Service unbound")
+        Log.d("tanmay", "Service unbound")
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("LocationService", "Service destroyed and location updates stopped.")
+        Log.d("tanmay", "Service destroyed and location updates stopped.")
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        stopForeground(STOP_FOREGROUND_REMOVE)
         serviceJob.cancel() // Cancel coroutines when service is destroyed
+        applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .edit {
+                remove(PREF_ACTIVE_SESSION)
+            }
+        stopSelf()
     }
+
 }
