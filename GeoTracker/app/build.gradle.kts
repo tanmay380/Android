@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.play.services.location)
+    implementation(libs.androidx.runtime.saveable)
     ksp(libs.androidx.room.compiler) // Room uses KSP
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

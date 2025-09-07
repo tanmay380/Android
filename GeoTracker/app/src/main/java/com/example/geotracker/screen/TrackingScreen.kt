@@ -24,7 +24,6 @@ import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -61,6 +60,7 @@ import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.RoundCap
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapEffect
+import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MapsComposeExperimentalApi
 import com.google.maps.android.compose.Marker
@@ -139,6 +139,11 @@ fun TrackingScreen(
 
     var selectedId by remember { mutableStateOf<Set<Long?>>(emptySet()) }
 
+//    val sessionStartMs = uiState.sessionStartMs
+
+    val lastLocation by rememberSaveable {
+        mutableStateOf<LatLng>(uiState.currentLatLng)
+    }
 
     // get screen size to compute padding dynamically
     val config = LocalConfiguration.current
@@ -219,6 +224,9 @@ fun TrackingScreen(
                     uiSettings = MapUiSettings(
                         zoomControlsEnabled = false,
                     ),
+                    properties = MapProperties(
+
+                    ),
                     onMapClick = {
                         Log.d(TAG, "TrackingScreen: on map clocked")
                     }
@@ -245,14 +253,18 @@ fun TrackingScreen(
                                 R.drawable.outline_add_location_24
                             )
                         )
-
                     }
-
-                    Polyline(
-                        points = uiState.routePoints,
-                        startCap = RoundCap()
-                    )
-                    Marker(state = MarkerState(position = uiState.currentLatLng))
+                    if (uiState.routePoints.isNotEmpty())
+                        Polyline(
+                            points = uiState.routePoints,
+                            startCap = RoundCap()
+                        )
+                    Marker(state = MarkerState(position = uiState.currentLatLng),
+                        icon = bitmapDescriptorFromVector(
+                            context,
+                            R.drawable.img,
+                            20, 20
+                        ),)
                 }
 
                 Column(
@@ -295,14 +307,13 @@ fun TrackingScreen(
 
                     FloatingActionButton(
                         onClick = {
-                            if (!isServiceStarted)
+                            if (!isServiceStarted){
                                 startOrStopService()
+                                viewModel.setServiceStarted()
+                            }
                             else {
                                 stopService()
-                                viewModel.setSessionId(null)
-
                             }
-                            viewModel.setServiceStarted(!isServiceStarted)
                             coroutineScope.launch {
                                 Toast.makeText(
                                     context,
@@ -331,6 +342,8 @@ fun TrackingScreen(
 @Composable
 private fun ElapsedTimerText(sessionStartMs: Long) {
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+//    Log.d(TAG, "TrackingScreen session vlue: ${sessionStartMs}")
+
 
     // Tick every second
     LaunchedEffect(sessionStartMs) {

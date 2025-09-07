@@ -4,6 +4,7 @@ import android.content.Context
 import android.location.Location
 import android.os.Looper
 import android.util.Log
+import com.google.android.gms.location.Granularity
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
@@ -27,7 +28,9 @@ class LocationProvider @Inject constructor(
 
     val request = LocationRequest.Builder(
         Priority.PRIORITY_HIGH_ACCURACY, 1000L
-    ).build()
+    ).setMinUpdateDistanceMeters(10f)   // ignore <5 m moves
+        .setGranularity(Granularity.GRANULARITY_FINE)
+        .build()
 
     private var callback: LocationCallback? = null
     private val _locFlow = MutableSharedFlow<Location>(replay = 1)
@@ -42,7 +45,8 @@ class LocationProvider @Inject constructor(
                 // emit off main thread if heavy, but SharedFlow works from here
                 CoroutineScope(Dispatchers.Default).launch {
 //                    Log.d("tanmay", "onLocationResult: $loc")
-                    _locFlow.emit(loc) }
+                    _locFlow.emit(loc)
+                }
             }
         }
         try {

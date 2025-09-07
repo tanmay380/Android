@@ -21,6 +21,7 @@ import com.example.geotracker.service.LocationService
 import com.example.geotracker.ui.theme.GeoTrackerTheme
 import com.example.geotracker.utils.Constants.PREFS
 import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
+import com.google.android.gms.maps.MapsInitializer
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -76,10 +77,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-
-        lifecycleScope.launch() {
-
-        }
+        MapsInitializer.initialize(applicationContext)
         handleIntentForSession(intent)
 
         setContent {

@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -37,6 +38,11 @@ class TrackingViewModel @Inject constructor(
     private val locationProvider: LocationProvider,
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
+
+    private val MIN_POLYLINE_DISTANCE_M = 10.0// inside ViewModel class
+    private var lastLatLngForPolyline: LatLng? = null
+
+
 
     private val _uiState = MutableStateFlow(TrackingUiState())
     val uiState: StateFlow<TrackingUiState> = _uiState
@@ -61,8 +67,13 @@ class TrackingViewModel @Inject constructor(
         _isServiceStarted.value = true
     }
 
-    fun setServiceStarted(value: Boolean) {
-        _isServiceStarted.value = value
+    fun setServiceStarted() {
+        _uiState.update {
+            it.copy(
+                sessionStartMs = System.currentTimeMillis()
+            )
+        }
+        _isServiceStarted.value = true
     }
 
     fun openSession(sId: Long) {
@@ -126,34 +137,78 @@ class TrackingViewModel @Inject constructor(
             timestamp = entity.time
         )
 
-        viewModelScope.launch {
 //            repo.insert(location)
 
-            val newLL = LatLng(location.lat, location.lng)
-            lastLatLng?.let { prev ->
-                val d = Location("").apply {
-                    latitude = prev.latitude
-                    longitude = prev.longitude
-                }.distanceTo(
-                    Location("").apply {
-                        latitude = newLL.latitude
-                        longitude = newLL.longitude
-                    }
-                )
-                totalDistance += d
-            }
-            lastLatLng = newLL
+        val newLL = LatLng(location.lat, location.lng)
+        var lastAppended = lastLatLngForPolyline
+        var addedToPolyline  = false
 
-            val elapsedHrs = (location.timestamp - sessionId.value!!.toLong()) / 1000.0 / 3600.0
-            _uiState.value = _uiState.value.copy(
-                currentLatLng = newLL,
-                routePoints = _uiState.value.routePoints + newLL,
-                distance = totalDistance / 1000.0,
-                speed = location.speed * 3.6,
-                avgSpeed = if (elapsedHrs > 0) (totalDistance / 1000.0) / elapsedHrs else 0.0
+        lastLatLng?.let { prev ->
+            val d = Location("").apply {
+                latitude = prev.latitude
+                longitude = prev.longitude
+            }.distanceTo(
+                Location("").apply {
+                    latitude = newLL.latitude
+                    longitude = newLL.longitude
+                }
             )
-
+            totalDistance += d
         }
+        lastLatLng = newLL
+
+        if (lastAppended == null) {
+            // first point: always append
+            _uiState.update { it.copy(
+                currentLatLng = newLL,
+                routePoints = it.routePoints + newLL
+            )}
+            lastAppended = newLL
+            lastLatLngForPolyline = newLL
+            addedToPolyline = true
+        } else {
+            val dMeters = FloatArray(1)
+            android.location.Location.distanceBetween(
+                lastAppended.latitude, lastAppended.longitude,
+                newLL.latitude, newLL.longitude, dMeters
+            )
+            if (dMeters[0] >= MIN_POLYLINE_DISTANCE_M) {
+                // movement exceeds threshold -> append and increment distance
+                _uiState.update { old ->
+                    val addedDistance = dMeters[0].toDouble()
+                    val newTotalMeters = (old.distance * 1000.0) + addedDistance
+                    old.copy(
+                        currentLatLng = newLL,
+                        routePoints = old.routePoints + newLL,
+                        distance = newTotalMeters / 1000.0
+                    )
+                }
+                lastLatLngForPolyline = newLL
+                addedToPolyline = true
+            } else {
+                // small move: update only current position & speed/avg but do NOT append
+                _uiState.update { old ->
+                    old.copy(currentLatLng = newLL, speed = entity.speed * 3.6)
+                }
+            }
+        }
+        val elapsedHours = (location.timestamp - (sessionId.value!!)) / 1000.0 / 3600.0
+        _uiState.update { cur ->
+            val totalKm = cur.distance
+            val avg = if (elapsedHours > 0) totalKm / elapsedHours else cur.avgSpeed
+            cur.copy(avgSpeed = avg, speed = entity.speed * 3.6)
+        }
+
+//
+//        val elapsedHrs = (location.timestamp - sessionId.value!!.toLong()) / 1000.0 / 3600.0
+//        _uiState.value = _uiState.value.copy(
+//            currentLatLng = newLL,
+//            routePoints = _uiState.value.routePoints + newLL,
+//            distance = totalDistance / 1000.0,
+//            speed = location.speed * 3.6,
+//            avgSpeed = if (elapsedHrs > 0) (totalDistance / 1000.0) / elapsedHrs else 0.0
+//        )
+        Log.d("tanmay", "handleNewLocation: ${_uiState.value.sessionStartMs}")
 
 
     }
@@ -174,7 +229,8 @@ class TrackingViewModel @Inject constructor(
             }
         }
     }
-    fun clearRouteBySessionId(sId : Long){
+
+    fun clearRouteBySessionId(sId: Long) {
         val locations = repo.getSessionLocations(sId)
         viewModelScope.launch {
             Log.d("tanmay", "openSession: ${locations.first().size}")
@@ -190,6 +246,9 @@ class TrackingViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
             sessionStartMs = 0
         )
+        setSessionId(null)
+        lastLatLngForPolyline = null
+        _isServiceStarted.value = false
     }
 
 }

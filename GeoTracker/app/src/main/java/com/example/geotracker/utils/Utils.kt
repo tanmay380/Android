@@ -34,14 +34,14 @@ object Utils {
         return "%02d:%02d:%02d".format(h, m, s)
     }
 
-    fun bitmapDescriptorFromVector(context: Context, drawableId: Int): BitmapDescriptor {
-        return BitmapDescriptorFactory.fromBitmap(vectorToBitmap(context, drawableId))
+    fun bitmapDescriptorFromVector(context: Context, drawableId: Int, width: Int? = 1, height: Int? = 1): BitmapDescriptor {
+        return BitmapDescriptorFactory.fromBitmap(vectorToBitmap(context, drawableId, width, height))
     }
 
 
-    private fun vectorToBitmap(context: Context, drawableId: Int): Bitmap {
+    private fun vectorToBitmap(context: Context, drawableId: Int, width: Int?, height: Int?): Bitmap {
         val drawable = ContextCompat.getDrawable(context, drawableId)!!
-        val bitmap = createBitmap(drawable.intrinsicWidth, drawable.intrinsicHeight)
+        val bitmap = createBitmap((drawable.intrinsicWidth / width!!), drawable.intrinsicHeight / height!!)
         val canvas = Canvas(bitmap)
         drawable.setBounds(0, 0, canvas.width, canvas.height)
         drawable.draw(canvas)

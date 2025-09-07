@@ -40,6 +40,7 @@ import javax.inject.Inject
 import androidx.core.content.edit
 import com.example.geotracker.utils.Constants.PREFS
 import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
+import com.google.android.gms.location.Granularity
 
 @AndroidEntryPoint
 class LocationService : Service() {
@@ -141,8 +142,10 @@ class LocationService : Service() {
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-//            Log.d("tanmay", "onLocationResult: sending data")
             val loc = result.lastLocation ?: return
+
+            Log.d("tanmay", "onLocationResult: sending data")
+
 
             val entity = LocationEntity(
                 sessionId = currentSessionId!!, // Use the stored sessionId
