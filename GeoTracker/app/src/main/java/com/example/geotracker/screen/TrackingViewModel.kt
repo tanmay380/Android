@@ -29,7 +29,8 @@ data class TrackingUiState(
     val speed: Double = 0.0,
     val avgSpeed: Double = 0.0,
     val locationPermissionGranted: Boolean = false,
-    val sessionStartMs: Long = 0L
+    val sessionStartMs: Long = 0L,
+    val bearing: Float = 0f
 )
 
 @HiltViewModel
@@ -119,8 +120,10 @@ class TrackingViewModel @Inject constructor(
         locationProvider.startUpdates()
         viewModelScope.launch {
             locationProvider.locFlow.collect {
+                Log.d("tanmay", "startGettingLocation: ${it.bearing}")
                 _uiState.value = _uiState.value.copy(
-                    currentLatLng = LatLng(it.latitude, it.longitude)
+                    currentLatLng = LatLng(it.latitude, it.longitude),
+                    bearing = it.bearing
                 )
             }
         }
@@ -128,18 +131,9 @@ class TrackingViewModel @Inject constructor(
 
     fun handleNewLocation(entity: Location) {
         locationProvider.stopUpdates()
-//        Log.d("tanmay", "handleNewLocation: ")
-        val location = LocationEntity(
-            sessionId = sessionId.value!!.toLong(),
-            lat = entity.latitude,
-            lng = entity.longitude,
-            speed = entity.speed,
-            timestamp = entity.time
-        )
+        Log.d("tanmay", "handleNewLocation: beaing ${entity.bearing} ")
 
-//            repo.insert(location)
-
-        val newLL = LatLng(location.lat, location.lng)
+        val newLL = LatLng(entity.latitude, entity.longitude)
         var lastAppended = lastLatLngForPolyline
         var addedToPolyline  = false
 
@@ -192,11 +186,11 @@ class TrackingViewModel @Inject constructor(
                 }
             }
         }
-        val elapsedHours = (location.timestamp - (sessionId.value!!)) / 1000.0 / 3600.0
+        val elapsedHours = (entity.time - (sessionId.value!!)) / 1000.0 / 3600.0
         _uiState.update { cur ->
             val totalKm = cur.distance
             val avg = if (elapsedHours > 0) totalKm / elapsedHours else cur.avgSpeed
-            cur.copy(avgSpeed = avg, speed = entity.speed * 3.6)
+            cur.copy(avgSpeed = avg, speed = entity.speed * 3.6, bearing = entity.bearing)
         }
 
 //

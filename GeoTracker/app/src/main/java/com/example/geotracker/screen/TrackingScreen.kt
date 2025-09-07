@@ -224,9 +224,6 @@ fun TrackingScreen(
                     uiSettings = MapUiSettings(
                         zoomControlsEnabled = false,
                     ),
-                    properties = MapProperties(
-
-                    ),
                     onMapClick = {
                         Log.d(TAG, "TrackingScreen: on map clocked")
                     }
@@ -262,9 +259,11 @@ fun TrackingScreen(
                     Marker(state = MarkerState(position = uiState.currentLatLng),
                         icon = bitmapDescriptorFromVector(
                             context,
-                            R.drawable.img,
+                            R.drawable.img, // my current location maker
                             20, 20
-                        ),)
+                        ),
+                        rotation = uiState.bearing
+                        )
                 }
 
                 Column(

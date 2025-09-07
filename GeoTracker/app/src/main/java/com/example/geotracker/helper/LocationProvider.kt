@@ -28,15 +28,17 @@ class LocationProvider @Inject constructor(
 
     val request = LocationRequest.Builder(
         Priority.PRIORITY_HIGH_ACCURACY, 1000L
-    ).setMinUpdateDistanceMeters(10f)   // ignore <5 m moves
+    )// ignore <5 m moves
         .setGranularity(Granularity.GRANULARITY_FINE)
         .build()
+
 
     private var callback: LocationCallback? = null
     private val _locFlow = MutableSharedFlow<Location>(replay = 1)
     val locFlow = _locFlow.asSharedFlow()
 
     fun startUpdates() {
+
         Log.d("tanmay", "startUpdates: $callback")
         if (callback != null) return
         callback = object : LocationCallback() {
