@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.geotracker.components.SessionSummary
 import com.example.geotracker.helper.LocationProvider
-import com.example.geotracker.model.LocationEntity
 import com.example.geotracker.repository.LocationRepository
 import com.google.android.gms.maps.model.LatLng
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,9 +39,8 @@ class TrackingViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val MIN_POLYLINE_DISTANCE_M = 10.0// inside ViewModel class
+    private val MIN_POLYLINE_DISTANCE_M = 2.0// inside ViewModel class
     private var lastLatLngForPolyline: LatLng? = null
-
 
 
     private val _uiState = MutableStateFlow(TrackingUiState())
@@ -131,11 +129,10 @@ class TrackingViewModel @Inject constructor(
 
     fun handleNewLocation(entity: Location) {
         locationProvider.stopUpdates()
-        Log.d("tanmay", "handleNewLocation: beaing ${entity.bearing} ")
 
         val newLL = LatLng(entity.latitude, entity.longitude)
         var lastAppended = lastLatLngForPolyline
-        var addedToPolyline  = false
+        var addedToPolyline = false
 
         lastLatLng?.let { prev ->
             val d = Location("").apply {
@@ -153,10 +150,12 @@ class TrackingViewModel @Inject constructor(
 
         if (lastAppended == null) {
             // first point: always append
-            _uiState.update { it.copy(
-                currentLatLng = newLL,
-                routePoints = it.routePoints + newLL
-            )}
+            _uiState.update {
+                it.copy(
+                    currentLatLng = newLL,
+                    routePoints = it.routePoints + newLL
+                )
+            }
             lastAppended = newLL
             lastLatLngForPolyline = newLL
             addedToPolyline = true
@@ -224,16 +223,16 @@ class TrackingViewModel @Inject constructor(
     //     }
     // }
 
-        fun openSessionBySessionId(sid: Long) {
+    fun openSessionBySessionId(sid: Long) {
         viewModelScope.launch {
             val locations = repo.getSessionLocations(sid).first()
             Log.d("tanmay", "openSession: ${locations.first()}")
             val latLngs = locations.map { it ->
                 LatLng(it.lat, it.lng)
             }
-           _uiState.value = _uiState.value.copy(
-               routePoints = latLngs
-           )
+            _uiState.value = _uiState.value.copy(
+                routePoints = latLngs
+            )
         }
     }
 
@@ -256,6 +255,13 @@ class TrackingViewModel @Inject constructor(
         setSessionId(null)
         lastLatLngForPolyline = null
         _isServiceStarted.value = false
+    }
+
+    fun deleteSession(sessionId: Long) {
+        viewModelScope.launch {
+
+            repo.deleteSession(sessionId)
+        }
     }
 
 }

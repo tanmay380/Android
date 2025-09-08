@@ -146,6 +146,9 @@ class LocationService : Service() {
 
             Log.d("tanmay", "onLocationResult: sending data")
 
+            Log.d("tanmay", "handleNewLocation: latitiude ${loc.latitude} long${loc.longitude}")
+
+
 
             val entity = LocationEntity(
                 sessionId = currentSessionId!!, // Use the stored sessionId
@@ -159,7 +162,8 @@ class LocationService : Service() {
             serviceScope.launch { // Launch coroutine to emit to the flow
 //                Log.d("tanmay", "onLocationResult: $repo")
                 repo?.insert(entity)
-                _locationEntityFlow.emit(loc)
+                if (loc.accuracy< 16)
+                    _locationEntityFlow.emit(loc)
             }
 
             updateNotification(

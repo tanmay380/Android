@@ -2,7 +2,10 @@ package com.example.geotracker.screen
 
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,22 +16,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.BottomSheetScaffold
+import androidx.compose.material3.BottomSheetScaffoldState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.rememberBottomSheetScaffoldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -60,13 +65,14 @@ import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.RoundCap
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapEffect
-import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.MapsComposeExperimentalApi
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -133,8 +139,11 @@ fun TrackingScreen(
                 }
             }
     }
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val state = rememberBottomSheetScaffoldState()
     val scope = rememberCoroutineScope()
+    var hideJob by remember {
+        mutableStateOf<Job?>(null)
+    }
     var googleMapRef by remember { mutableStateOf<GoogleMap?>(null) }
 
     var selectedId by remember { mutableStateOf<Set<Long?>>(emptySet()) }
@@ -182,36 +191,68 @@ fun TrackingScreen(
 
 
     }
+    var controlsVisible by remember { mutableStateOf(true) }
+
+    fun resetControlsTimer(scope: CoroutineScope) {
+        hideJob?.cancel()
+        controlsVisible = true
+        hideJob = scope.launch {
+            delay(5000) // 5 seconds of inactivity
+            controlsVisible = false
+            Log.d(TAG, "resetControlsTimer: user is not touching")
+        }
+    }
+
 
     AppWithDrawer(viewModel) { drawerState, set ->
         selectedId = set
-        Scaffold(modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars), topBar = {
-            TopAppBar(
-                title = {
-                    Row() {
+        BottomSheetScaffold(
+            scaffoldState = state,
+            sheetContainerColor = Color.Black.copy(alpha = 0.4f),
+            sheetContentColor = Color.Transparent,
+            contentColor = Color.Transparent,
+            containerColor = Color.Transparent,
+            sheetDragHandle = {},
+            sheetShape = RoundedCornerShape(0.dp),
 
-                        Text("this is a text")
-                        Text("this is another text")
-                    }
-                },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        scope.launch {
-                            drawerState.open()
+            topBar = {
+                AnimatedVisibility(controlsVisible) {
+                    TopAppBar(
+                        title = {
+                            Row() {
+
+                                Text("this is a text")
+                                Text("this is another text")
+                            }
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = {
+                                scope.launch {
+                                    drawerState.open()
+
+                                }
+                            }) {
+                                Image(
+                                    imageVector = Icons.Outlined.Menu,
+                                    contentDescription = "Menu"
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = primaryLightHighContrast
+                        ),
+                        actions = {
 
                         }
-                    }) {
-                        Image(imageVector = Icons.Outlined.Menu, contentDescription = "Menu")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = primaryLightHighContrast
-                ),
-                actions = {
+                    )
+
 
                 }
-            )
-        }) { padding ->
+
+            },
+            sheetContent = {
+                BootomScaffoldSheetContent(viewModel, uiState, state)
+            }) { padding ->
             Box(
                 Modifier
                     .fillMaxSize()
@@ -226,6 +267,7 @@ fun TrackingScreen(
                     ),
                     onMapClick = {
                         Log.d(TAG, "TrackingScreen: on map clocked")
+                        resetControlsTimer(scope)
                     }
 
                 ) {
@@ -256,82 +298,202 @@ fun TrackingScreen(
                             points = uiState.routePoints,
                             startCap = RoundCap()
                         )
-                    Marker(state = MarkerState(position = uiState.currentLatLng),
+                    Marker(
+                        state = MarkerState(position = uiState.currentLatLng),
                         icon = bitmapDescriptorFromVector(
                             context,
                             R.drawable.img, // my current location maker
                             20, 20
                         ),
                         rotation = uiState.bearing
-                        )
+                    )
                 }
 
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Log.d(TAG, "TrackingScreen session vlue: ${uiState.sessionStartMs}")
-                    ElapsedTimerText(uiState.sessionStartMs)
-                    Text("Speed: %.1f km/h".format(uiState.speed), color = Color.Black)
-                    Text("Distance: %.2f km".format(uiState.distance), color = Color.Black)
-                    Text("Avg: %.1f km/h".format(uiState.avgSpeed), color = Color.Black)
-
-                }
-
-
-                Column(
+                AnimatedVisibility(
+                    controlsVisible,
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp), // gap between buttons
-                    horizontalAlignment = Alignment.End
-                ) {
-                    ExtendedFloatingActionButton(
-                        onClick = {
-                            Log.d("tanmay", "TrackingScreen: button lodekd")
-                            onMyLocationClick()
-                            followMode = true
-                            myLocationClicked = true
-                        },
 
-                        icon = {
-                            Icon(
-                                Icons.Filled.MyLocation,
-                                contentDescription = "My Location"
-                            )
-                        },
-                        text = { Text(if (followMode) "Following" else "My Location") }
-                    )
-
-                    FloatingActionButton(
-                        onClick = {
-                            if (!isServiceStarted){
-                                startOrStopService()
-                                viewModel.setServiceStarted()
-                            }
-                            else {
-                                stopService()
-                            }
-                            coroutineScope.launch {
-                                Toast.makeText(
-                                    context,
-                                    "$isServiceStarted",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-
-                            }
-                        },
                     ) {
-                        Image(
-                            imageVector = if (!isServiceStarted) Icons.Filled.PlayArrow else
-                                Icons.Filled.Stop, contentDescription = "Start/Stop"
+                    Column(
+
+                        verticalArrangement = Arrangement.spacedBy(12.dp), // gap between buttons
+                        horizontalAlignment = Alignment.End
+                    ) {
+                        ExtendedFloatingActionButton(
+                            onClick = {
+                                Log.d("tanmay", "TrackingScreen: button lodekd")
+                                onMyLocationClick()
+                                followMode = true
+                                myLocationClicked = true
+                            },
+
+                            icon = {
+                                Icon(
+                                    Icons.Filled.MyLocation,
+                                    contentDescription = "My Location"
+                                )
+                            },
+                            text = { Text(if (followMode) "Following" else "My Location") }
                         )
+
+                        FloatingActionButton(
+                            onClick = {
+                                if (!isServiceStarted) {
+                                    startOrStopService()
+                                    viewModel.setServiceStarted()
+                                } else {
+                                    stopService()
+                                }
+                                coroutineScope.launch {
+                                    Toast.makeText(
+                                        context,
+                                        "$isServiceStarted",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+
+                                }
+                            },
+                        ) {
+                            Image(
+                                imageVector = if (!isServiceStarted) Icons.Filled.PlayArrow else
+                                    Icons.Filled.Stop, contentDescription = "Start/Stop"
+                            )
+                        }
                     }
+
                 }
 //        } else {
 //            Text("Location permission denied. Please grant permission to use this feature.")
 //        }
+            }
+        }
+    }
+
+
+/*    BottomSheetScaffold(
+    containerColor = Color.White,
+        sheetContainerColor = Color.Black.copy(alpha = 0.4f),
+        sheetContentColor = Color.White, scaffoldState = drawerState,
+        sheetDragHandle = {},
+        sheetShape = RoundedCornerShape(0.dp),
+        sheetContent = {
+            Box(
+                modifier = Modifier
+                    .clickable(*//*interactionSource = interactionSource, indication = null)*//*) {
+                        scope.launch {
+
+                            Log.d(TAG, "TrackingScreen: clicked ${drawerState.bottomSheetState.currentValue}")
+                            if (drawerState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded)
+                                drawerState.bottomSheetState.expand()
+                            else
+                                drawerState.bottomSheetState.partialExpand()
+                        }
+
+                    }
+
+            ) {
+                Column {
+
+                    Row(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(15.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        val status =
+                            if (viewModel.isServiceStarted.collectAsState().value) "Running" else ""
+                        Text("%.1f km/h".format(uiState.speed), color = Color.White)
+                        Text(status, color = Color.White)
+                        ElapsedTimerText(uiState.sessionStartMs)
+                        Text("%.2f km".format(uiState.distance), color = Color.White)
+
+                    }
+
+                    Row(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(bottom = 13.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        val status =
+                            if (viewModel.isServiceStarted.collectAsState().value) "Running" else ""
+                        Text("%.1f km/h".format(uiState.speed), color = Color.White)
+                        Text(status, color = Color.White)
+                        ElapsedTimerText(uiState.sessionStartMs)
+                        Text("%.2f km".format(uiState.distance), color = Color.White)
+
+                    }
+                }
+        }
+
+
+
+
+}
+    ) {}
+}*/
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BootomScaffoldSheetContent(
+    viewModel: TrackingViewModel,
+    uiState: TrackingUiState,
+    drawerState: BottomSheetScaffoldState
+) {
+    val interactionSource = remember {
+        MutableInteractionSource()
+    }
+
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = Modifier
+            .clickable(interactionSource = interactionSource, indication = null) {
+                scope.launch {
+                    Log.d(
+                        TAG,
+                        "TrackingScreen: clicked ${drawerState.bottomSheetState.currentValue}"
+                    )
+                    if (drawerState.bottomSheetState.currentValue == SheetValue.PartiallyExpanded)
+                        drawerState.bottomSheetState.expand()
+                    else
+                        drawerState.bottomSheetState.partialExpand()
+                }
+            }
+    ) {
+        Column {
+
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(15.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                val status =
+                    if (viewModel.isServiceStarted.collectAsState().value) "Running" else ""
+                Text("%.1f km/h".format(uiState.speed), color = Color.White)
+                Text(status, color = Color.White)
+                ElapsedTimerText(uiState.sessionStartMs)
+                Text("%.2f km".format(uiState.distance), color = Color.White)
+
+            }
+
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(15.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                val status =
+                    if (viewModel.isServiceStarted.collectAsState().value) "Running" else ""
+                Text("%.1f km/h".format(uiState.speed), color = Color.White)
+                Text(status, color = Color.White)
+                ElapsedTimerText(uiState.sessionStartMs)
+                Text("%.2f km".format(uiState.distance), color = Color.White)
+
             }
         }
     }
@@ -353,7 +515,8 @@ private fun ElapsedTimerText(sessionStartMs: Long) {
     }
     if (sessionStartMs > 0) {
         val elapsed = now - sessionStartMs
-        val text = if (elapsed > 0) "Time: ${Utils.formatDuration(elapsed)}" else "Time: 00:00:00"
-        Text(text, color = Color.Black)
+        val text =
+            if (elapsed > 0) "Time: ${Utils.formatDuration(elapsed)}" else "Time: 00:00:00"
+        Text(text, color = Color.White)
     }
 }

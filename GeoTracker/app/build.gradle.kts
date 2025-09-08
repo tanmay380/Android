@@ -66,7 +66,7 @@ dependencies {
     implementation("androidx.room:room-ktx:2.7.2")
 
     // Android Maps Compose composables for the Maps SDK for Android
-    implementation("com.google.maps.android:maps-compose:6.7.1")
+    implementation("com.google.maps.android:maps-compose:6.7.2")
     implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.10.2")
 
     // Hilt dependencies
@@ -75,5 +75,8 @@ dependencies {
 
     implementation("androidx.compose.material:material-icons-extended-android:1.7.8")
     implementation("androidx.compose.material3:material3-window-size-class:1.3.2")
+    implementation("com.google.android.gms:play-services-maps:19.2.0")
+    implementation("com.google.accompanist:accompanist-permissions:0.37.3")
+
 
 }

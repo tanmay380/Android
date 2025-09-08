@@ -20,6 +20,7 @@ import kotlin.math.sqrt
 class LocationRepository @Inject constructor(private val dao: LocationDao) {
     suspend fun insert(loc: LocationEntity) = dao.insert(loc)
     fun getSessionLocations(sessionId: Long): Flow<List<LocationEntity>> = dao.getSessionLocations(sessionId)
+    suspend fun deleteSession(sessionId: Long) = dao.deleteSession(sessionId)
 
     // stream of summaries: whenever session ids change, recompute summaries
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -67,4 +68,5 @@ class LocationRepository @Inject constructor(private val dao: LocationDao) {
         val c = 2 * atan2(sqrt(a), sqrt(1 - a))
         return R * c
     }
+
 }

@@ -1,6 +1,7 @@
 package com.example.geotracker.dao
 
 import androidx.room.Dao
+import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
 import com.example.geotracker.model.LocationEntity
@@ -28,4 +29,7 @@ interface LocationDao {
 
     @Query("SELECT MAX(timestamp) FROM locations WHERE sessionId = :id")
     suspend fun getSessionEndTime(id: Long): Long?
+
+    @Query("delete from locations where sessionId = :sessionId")
+    suspend fun deleteSession(sessionId: Long)
 }

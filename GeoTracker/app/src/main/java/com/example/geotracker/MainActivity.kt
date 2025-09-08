@@ -1,5 +1,6 @@
 package com.example.geotracker
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
@@ -11,6 +12,11 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -21,10 +27,14 @@ import com.example.geotracker.service.LocationService
 import com.example.geotracker.ui.theme.GeoTrackerTheme
 import com.example.geotracker.utils.Constants.PREFS
 import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
+import com.example.permissions.PermissionGateSequential
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.android.gms.maps.MapsInitializer
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.security.Permission
 
 // MainActivity.kt (refactor)
 @AndroidEntryPoint
@@ -82,40 +92,44 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             GeoTrackerTheme {
-                TrackingScreen(
-                    viewModel = viewModel,
-                    // 👉 START/RESUME continuous tracking
-                    startOrStopService = {
-                        startService()
-                        viewModel.createSessionIfAbsent()
+//                ensurePermissionsIfYouNeedTo()
+                PermissionGateSequential {
 
-                        pendingOrNow { svc -> svc.startLocationUpdates(viewModel.sessionId.value!!) }
-                    },
-                    stopService = {
-                        Log.d(TAG, "onCreate: stop service called")
-                        if (isBound) {
-                            boundService = null
-                            isBound = false
-                        }
-                        viewModel.sessionStopped()
-                        unbindService(connection)
-                        stopService(Intent(this, LocationService::class.java))
-                    },
-                    // 👉 ONE-SHOT: get current location on demand
-                    onMyLocationClick = {
+                    TrackingScreen(
+
+                        viewModel = viewModel,
+                        // 👉 START/RESUME continuous tracking
+                        startOrStopService = {
+                            startService()
+                            viewModel.createSessionIfAbsent()
+
+                            pendingOrNow { svc -> svc.startLocationUpdates(viewModel.sessionId.value!!) }
+                        },
+                        stopService = {
+                            Log.d(TAG, "onCreate: stop service called")
+                            if (isBound) {
+                                boundService = null
+                                isBound = false
+                            }
+                            viewModel.sessionStopped()
+                            unbindService(connection)
+                            stopService(Intent(this, LocationService::class.java))
+                        },
+                        // 👉 ONE-SHOT: get current location on demand
+                        onMyLocationClick = {
 //                        startService()
-                        viewModel.startGettingLocation()
+                            viewModel.startGettingLocation()
 
-                        // ensure service exists & bound (no-op if already)
-                    }
-                )
+                            // ensure service exists & bound (no-op if already)
+                        }
+                    )
+                }
 
 //                startAndBindService()
             }
         }
 
         // If you still run a permission gate, call it here; do NOT auto-start/bind in onStart.
-        ensurePermissionsIfYouNeedTo()
     }
 
     private fun startService() {
@@ -205,7 +219,41 @@ class MainActivity : ComponentActivity() {
     }
 
     // ---- Permissions (keep whatever you had; just don't auto-start service here) ----
+    @OptIn(ExperimentalPermissionsApi::class)
+    @Composable
     private fun ensurePermissionsIfYouNeedTo() {
-        // no-op in this refactor; keep your existing permission flow
+        val permissions =
+            listOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.POST_NOTIFICATIONS
+            )
+
+
+        val multiplePermissionsState = rememberMultiplePermissionsState(permissions)
+
+        Column {
+            when {
+                multiplePermissionsState.allPermissionsGranted -> {
+                    Text("All permissions granted 🎉")
+                }
+
+                multiplePermissionsState.shouldShowRationale -> {
+                    Column {
+                        Text("We need these permissions for location & notifications.")
+                        Button(onClick = { multiplePermissionsState.launchMultiplePermissionRequest() }) {
+                            Text("Allow")
+                        }
+                    }
+                }
+
+                else -> {
+
+                    SideEffect {
+                        multiplePermissionsState.launchMultiplePermissionRequest()
+                    }
+                }
+            }
+        }
     }
+
 }

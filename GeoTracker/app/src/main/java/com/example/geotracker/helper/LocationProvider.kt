@@ -27,9 +27,8 @@ class LocationProvider @Inject constructor(
     private val fused = LocationServices.getFusedLocationProviderClient(appContext)
 
     val request = LocationRequest.Builder(
-        Priority.PRIORITY_HIGH_ACCURACY, 1000L
-    )// ignore <5 m moves
-        .setGranularity(Granularity.GRANULARITY_FINE)
+        Priority.PRIORITY_HIGH_ACCURACY, 2000L
+    ).setWaitForAccurateLocation(true)
         .build()
 
 
