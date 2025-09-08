@@ -212,15 +212,28 @@ class TrackingViewModel @Inject constructor(
         super.onCleared()
     }
 
-    fun openSessionBySessionId(sid: Long) {
-        val locations = repo.getSessionLocations(sid)
+    // fun openSessionBySessionId(sid: Long) {
+    //     val locations = repo.getSessionLocations(sid)
+    //     viewModelScope.launch {
+    //         Log.d("tanmay", "openSession: ${locations.first().size}")
+    //         locations.first().forEach {
+    //             _uiState.value = _uiState.value.copy(
+    //                 routePoints = _uiState.value.routePoints + LatLng(it.lat, it.lng)
+    //             )
+    //         }
+    //     }
+    // }
+
+        fun openSessionBySessionId(sid: Long) {
         viewModelScope.launch {
-            Log.d("tanmay", "openSession: ${locations.first().size}")
-            locations.first().forEach {
-                _uiState.value = _uiState.value.copy(
-                    routePoints = _uiState.value.routePoints + LatLng(it.lat, it.lng)
-                )
+            val locations = repo.getSessionLocations(sid).first()
+            Log.d("tanmay", "openSession: ${locations.first()}")
+            val latLngs = locations.map { it ->
+                LatLng(it.lat, it.lng)
             }
+           _uiState.value = _uiState.value.copy(
+               routePoints = latLngs
+           )
         }
     }
 
