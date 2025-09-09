@@ -1,4 +1,4 @@
-package com.example.geotracker.service
+package com.example.geotracker.location.service
 
 import android.Manifest
 import android.app.Notification
@@ -6,7 +6,6 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
@@ -16,10 +15,12 @@ import android.os.Looper
 import android.util.Log
 import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
+import androidx.core.content.edit
 import com.example.geotracker.MainActivity
 import com.example.geotracker.R
 import com.example.geotracker.model.LocationEntity
 import com.example.geotracker.repository.LocationRepository
+import com.example.geotracker.utils.Constants
 import com.example.geotracker.utils.Utils
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -37,10 +38,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
-import androidx.core.content.edit
-import com.example.geotracker.utils.Constants.PREFS
-import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
-import com.google.android.gms.location.Granularity
 
 @AndroidEntryPoint
 class LocationService : Service() {
@@ -128,9 +125,9 @@ class LocationService : Service() {
         }
         startForeground(1, createNotification("Initializing..."))
         currentSessionId = currenid
-        applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        applicationContext.getSharedPreferences(Constants.PREFS, MODE_PRIVATE)
             .edit {
-                putLong(PREF_ACTIVE_SESSION, currentSessionId!!)
+                putLong(Constants.PREF_ACTIVE_SESSION, currentSessionId!!)
             }
         fusedLocationClient.requestLocationUpdates(
             request,
@@ -149,14 +146,15 @@ class LocationService : Service() {
             Log.d("tanmay", "handleNewLocation: latitiude ${loc.latitude} long${loc.longitude}")
 
 
-
             val entity = LocationEntity(
                 sessionId = currentSessionId!!, // Use the stored sessionId
                 lat = loc.latitude,
                 lng = loc.longitude,
-                speed = loc.speed,
+                speed = loc.speed * 3.6f,
                 timestamp = loc.time
             )
+
+            // create a RoutePoint for map drawing
             println("service is ruunign")
 
             serviceScope.launch { // Launch coroutine to emit to the flow
@@ -178,9 +176,7 @@ class LocationService : Service() {
 //        Log.d("tanmay", "createNotification: $currentSessionId")
         val intent =
             Intent(this, MainActivity::class.java).apply { // Assuming MainActivity is your main UI
-                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                putExtra("isOpenedFromNoti", true)
-                putExtra("EXTRA_SESSION_ID", currentSessionId)
+                 Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             }
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         val builder = Notification.Builder(this, "geo_tracker")
@@ -223,9 +219,9 @@ class LocationService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         serviceJob.cancel() // Cancel coroutines when service is destroyed
         applicationContext
-            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getSharedPreferences(Constants.PREFS, MODE_PRIVATE)
             .edit {
-                remove(PREF_ACTIVE_SESSION)
+                remove(Constants.PREF_ACTIVE_SESSION)
             }
         stopSelf()
     }

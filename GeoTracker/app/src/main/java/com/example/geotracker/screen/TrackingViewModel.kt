@@ -1,12 +1,18 @@
 package com.example.geotracker.screen
 
+import android.Manifest
 import android.location.Location
 import android.util.Log
+import androidx.annotation.RequiresPermission
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.geotracker.components.SessionSummary
-import com.example.geotracker.helper.LocationProvider
+import com.example.geotracker.helper.findNearestRoutePointIndex
+import com.example.geotracker.location.provider.LocationProvider
+import com.example.geotracker.model.RoutePoint
+import com.example.geotracker.model.SatelliteInfo
 import com.example.geotracker.repository.LocationRepository
 import com.google.android.gms.maps.model.LatLng
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -29,7 +36,9 @@ data class TrackingUiState(
     val avgSpeed: Double = 0.0,
     val locationPermissionGranted: Boolean = false,
     val sessionStartMs: Long = 0L,
-    val bearing: Float = 0f
+    val bearing: Float = 0f,
+    val elevation: String = "",
+    val accuracy: Int = 0
 )
 
 @HiltViewModel
@@ -39,9 +48,16 @@ class TrackingViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
+    private val shared = locationProvider.satelliteFlow()
+        .shareIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), replay = 1)
+
+    val satelliteState: StateFlow<SatelliteInfo?> =
+        shared.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
     private val MIN_POLYLINE_DISTANCE_M = 2.0// inside ViewModel class
     private var lastLatLngForPolyline: LatLng? = null
 
+    var isFromIntent = mutableStateOf(false)
 
     private val _uiState = MutableStateFlow(TrackingUiState())
     val uiState: StateFlow<TrackingUiState> = _uiState
@@ -66,6 +82,17 @@ class TrackingViewModel @Inject constructor(
         _isServiceStarted.value = true
     }
 
+    private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
+    val routePoints: StateFlow<List<RoutePoint>> = _routePoints
+
+    fun addRoutePoint(point: RoutePoint) {
+        _routePoints.update { it + point }
+    }
+
+    fun clearRoute() {
+        _routePoints.value = emptyList()
+    }
+
     fun setServiceStarted() {
         _uiState.update {
             it.copy(
@@ -82,9 +109,21 @@ class TrackingViewModel @Inject constructor(
 
     }
 
+    init {
+        startGettingLocation()
+    }
+
     // backing mutable + public read-only selection flow
     private val _selectedSessionId = MutableStateFlow<Set<Long?>>(emptySet())
     val selectedSessionId: StateFlow<Set<Long?>> = _selectedSessionId.asStateFlow()
+
+    private val _selectedPoint = MutableStateFlow<RoutePoint?>(null)
+    val selectedPoint: StateFlow<RoutePoint?> = _selectedPoint
+
+    fun onMapTapped(lat: Double, lng: Double) {
+        val idx = findNearestRoutePointIndex(_routePoints.value, lat, lng)
+        if (idx >= 0) _selectedPoint.value = _routePoints.value[idx]
+    }
 
     /** Toggle selection: select id if not selected, otherwise clear selection. */
     fun toggleSessionSelection(sessionId: Long) {
@@ -114,14 +153,19 @@ class TrackingViewModel @Inject constructor(
         Log.d("tanmay", "createSessionIfAbsent: ${sessionId.value}")
     }
 
+    @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
     fun startGettingLocation() {
         locationProvider.startUpdates()
         viewModelScope.launch {
             locationProvider.locFlow.collect {
-                Log.d("tanmay", "startGettingLocation: ${it.bearing}")
+//                Log.d("tanmay", "startGettingLocation: ${it.bearing}")
                 _uiState.value = _uiState.value.copy(
                     currentLatLng = LatLng(it.latitude, it.longitude),
-                    bearing = it.bearing
+                    bearing = it.bearing,
+                    elevation = "${it.altitude.toInt()}±${it.mslAltitudeAccuracyMeters}",
+                    accuracy = it.accuracy.toInt()
+
+
                 )
             }
         }
@@ -161,7 +205,7 @@ class TrackingViewModel @Inject constructor(
             addedToPolyline = true
         } else {
             val dMeters = FloatArray(1)
-            android.location.Location.distanceBetween(
+            Location.distanceBetween(
                 lastAppended.latitude, lastAppended.longitude,
                 newLL.latitude, newLL.longitude, dMeters
             )
@@ -185,11 +229,18 @@ class TrackingViewModel @Inject constructor(
                 }
             }
         }
+        createRoutePoints(entity)
+
         val elapsedHours = (entity.time - (sessionId.value!!)) / 1000.0 / 3600.0
         _uiState.update { cur ->
             val totalKm = cur.distance
             val avg = if (elapsedHours > 0) totalKm / elapsedHours else cur.avgSpeed
-            cur.copy(avgSpeed = avg, speed = entity.speed * 3.6, bearing = entity.bearing)
+            cur.copy(
+                avgSpeed = avg,
+                speed = entity.speed * 3.6,
+                bearing = entity.bearing,
+                elevation = "${entity.altitude.toInt()}±${entity.mslAltitudeAccuracyMeters.toInt()}"
+            )
         }
 
 //
@@ -230,9 +281,19 @@ class TrackingViewModel @Inject constructor(
             val latLngs = locations.map { it ->
                 LatLng(it.lat, it.lng)
             }
+            locations.forEach {
+                val route = RoutePoint(
+                    lat = it.lat,
+                    lng = it.lng,
+                    speed = it.speed * 3.6f,
+                    timestamp = it.timestamp
+                )
+                addRoutePoint(route)
+            }
             _uiState.value = _uiState.value.copy(
                 routePoints = latLngs
             )
+            isFromIntent.value = true
         }
     }
 
@@ -264,4 +325,15 @@ class TrackingViewModel @Inject constructor(
         }
     }
 
+}
+
+private fun TrackingViewModel.createRoutePoints(entity: Location) {
+    val point = RoutePoint(
+        lat = entity.latitude,
+        lng = entity.longitude,
+        speed = entity.speed,
+        timestamp = entity.time
+    )
+
+    addRoutePoint(point)
 }

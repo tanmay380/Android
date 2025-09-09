@@ -23,7 +23,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.geotracker.screen.TrackingScreen
 import com.example.geotracker.screen.TrackingViewModel
-import com.example.geotracker.service.LocationService
+import com.example.geotracker.location.service.LocationService
 import com.example.geotracker.ui.theme.GeoTrackerTheme
 import com.example.geotracker.utils.Constants.PREFS
 import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
@@ -34,7 +34,6 @@ import com.google.android.gms.maps.MapsInitializer
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import java.security.Permission
 
 // MainActivity.kt (refactor)
 @AndroidEntryPoint
@@ -178,9 +177,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntentForSession(intent: Intent?) {
-//        Log.d(TAG, "handleIntentForSession: $intent")
-//        val sid = intent?.getLongExtra("EXTRA_SESSION_ID", -1L) ?: -1L
-//        if (sid > 0) viewModel.openSession(sid)
         val sidFromIntent = intent?.getLongExtra("EXTRA_SESSION_ID", -1L) ?: -1L
         val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val sidFromPrefs = prefs.getLong(PREF_ACTIVE_SESSION, -1L)
@@ -207,7 +203,9 @@ class MainActivity : ComponentActivity() {
     // If you want reopen-from-notification to rebind (without auto-starting a new service):
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+
         Log.d(TAG, "onNewIntent: $isBound")
+        viewModel.isFromIntent.value = true
         if (!isBound) {
             // Only bind; do NOT call startForegroundService here
             bindService(
@@ -216,6 +214,7 @@ class MainActivity : ComponentActivity() {
                 Context.BIND_AUTO_CREATE
             )
         }
+        handleIntentForSession(intent)
     }
 
     // ---- Permissions (keep whatever you had; just don't auto-start service here) ----

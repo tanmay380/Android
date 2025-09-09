@@ -53,7 +53,7 @@ fun AppWithDrawer(
     content: @Composable (drawerState: DrawerState, selectedId: Set<Long?>) -> Unit
 ) {
     val summaries by viewModel.sessionSummary.collectAsState()
-    Log.d("tanmay", "AppWithDrawer: $summaries")
+//    Log.d("tanmay", "AppWithDrawer: $summaries")
     val selectedId by viewModel.selectedSessionId.collectAsState()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
