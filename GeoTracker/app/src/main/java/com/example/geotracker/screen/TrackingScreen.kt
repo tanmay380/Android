@@ -380,8 +380,13 @@ fun TrackingScreen(
                                 R.drawable.outline_add_location_24
                             )
                         )
-                        SelectedPointCard(selectedPointRoute!!, context)
+                        // SelectedPointCard MOVED FROM HERE
                     }
+                } // GoogleMap ends
+
+                // SelectedPointCard MOVED TO HERE, wrapped in its conditional
+                if (selectedPointRoute != null) {
+                    SelectedPointCard(selectedPointRoute!!, context)
                 }
             }
         }
@@ -689,9 +694,9 @@ fun SelectedPointCard(selected: RoutePoint?, context: Context) {
             Text("Lat: ${"%.6f".format(selected.lat)}")
             Text("Lng: ${"%.6f".format(selected.lng)}")
             Text("Speed: ${"%.1f".format(selected.speed) } kmph")
-            Text("Speed: ${formatDuration(selected.timestamp)} ")
+            Text("time : ${Utils.formatEpoch(selected.timestamp)} ")
+            Text("distance: ${selected.distanceClicked}" )
             // add timestamp etc.
         }
     }
 }
-

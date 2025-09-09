@@ -121,8 +121,11 @@ class TrackingViewModel @Inject constructor(
     val selectedPoint: StateFlow<RoutePoint?> = _selectedPoint
 
     fun onMapTapped(lat: Double, lng: Double) {
-        val idx = findNearestRoutePointIndex(_routePoints.value, lat, lng)
-        if (idx >= 0) _selectedPoint.value = _routePoints.value[idx]
+        val response = findNearestRoutePointIndex(_routePoints.value, lat, lng)
+
+        if (response.first < 0) return
+            _selectedPoint.value = _routePoints.value[response.first]
+        _routePoints.value[response.first].copy(distanceClicked = response.second.toFloat())
     }
 
     /** Toggle selection: select id if not selected, otherwise clear selection. */
@@ -332,7 +335,8 @@ private fun TrackingViewModel.createRoutePoints(entity: Location) {
         lat = entity.latitude,
         lng = entity.longitude,
         speed = entity.speed,
-        timestamp = entity.time
+        timestamp = entity.time,
+//        distanceClicked =
     )
 
     addRoutePoint(point)

@@ -11,6 +11,10 @@ import java.util.Locale
 import androidx.core.graphics.createBitmap
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
+import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import kotlin.time.ExperimentalTime
 
 object Utils {
     fun getTimeElapsed(timestamp: Long): String{
@@ -36,6 +40,14 @@ object Utils {
 
     fun bitmapDescriptorFromVector(context: Context, drawableId: Int, width: Int? = 1, height: Int? = 1): BitmapDescriptor {
         return BitmapDescriptorFactory.fromBitmap(vectorToBitmap(context, drawableId, width, height))
+    }
+
+    @OptIn(ExperimentalTime::class)
+    fun formatEpoch(ms: Long): String {
+        val instant = Instant.ofEpochMilli(ms)
+        val zone = ZoneId.systemDefault() // phone's timezone
+        val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+        return instant.atZone(zone).format(formatter)
     }
 
 

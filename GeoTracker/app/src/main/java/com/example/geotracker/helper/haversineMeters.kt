@@ -17,8 +17,8 @@ fun haversineMeters(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Dou
     return R * c
 }
 
-fun findNearestRoutePointIndex(route: List<RoutePoint>, lat: Double, lng: Double): Int {
-    if (route.isEmpty()) return -1
+fun findNearestRoutePointIndex(route: List<RoutePoint>, lat: Double, lng: Double): Pair<Int, Double> {
+    if (route.isEmpty()) return -1 to Double.MAX_VALUE
     var bestIndex = 0
     var bestDist = Double.MAX_VALUE
     for (i in route.indices) {
@@ -30,5 +30,5 @@ fun findNearestRoutePointIndex(route: List<RoutePoint>, lat: Double, lng: Double
         }
     }
     Log.d("tanmay", "findNearestRoutePointIndex: $bestDist")
-    return bestIndex
+    return bestIndex to bestDist
 }
