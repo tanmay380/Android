@@ -4,6 +4,7 @@ import android.Manifest
 import android.location.Location
 import android.util.Log
 import androidx.annotation.RequiresPermission
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
@@ -11,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.geotracker.components.SessionSummary
 import com.example.geotracker.helper.findNearestRoutePointIndex
 import com.example.geotracker.location.provider.LocationProvider
+import com.example.geotracker.location.service.LocationService
 import com.example.geotracker.model.RoutePoint
 import com.example.geotracker.model.SatelliteInfo
 import com.example.geotracker.repository.LocationRepository
@@ -68,8 +70,8 @@ class TrackingViewModel @Inject constructor(
         }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
 
-    var _isServiceStarted = MutableStateFlow(false)
-    var isServiceStarted: StateFlow<Boolean> = _isServiceStarted.asStateFlow()
+//    var _isServiceStarted = MutableStateFlow(false)
+//    var isServiceStarted: StateFlow<Boolean> = isServiceStarted.asStateFlow()
 
     private var totalDistance = 0.0
     private var lastLatLng: LatLng? = null
@@ -79,7 +81,6 @@ class TrackingViewModel @Inject constructor(
 
     fun setSessionId(id: Long?) {
         _sessionId.value = id
-        _isServiceStarted.value = true
     }
 
     private val _routePoints = MutableStateFlow<List<RoutePoint>>(emptyList())
@@ -99,7 +100,7 @@ class TrackingViewModel @Inject constructor(
                 sessionStartMs = System.currentTimeMillis()
             )
         }
-        _isServiceStarted.value = true
+
     }
 
     fun openSession(sId: Long) {
@@ -124,8 +125,10 @@ class TrackingViewModel @Inject constructor(
         val response = findNearestRoutePointIndex(_routePoints.value, lat, lng)
 
         if (response.first < 0) return
-            _selectedPoint.value = _routePoints.value[response.first]
-        _routePoints.value[response.first].copy(distanceClicked = response.second.toFloat())
+        Log.d("tanmay", "onMapTapped: viewmodel vlaue ${response.second}")
+        _selectedPoint.value = _routePoints.value[response.first]
+
+        _selectedPoint.value = _selectedPoint.value!!.copy(distanceClicked = response.second.toFloat())
     }
 
     /** Toggle selection: select id if not selected, otherwise clear selection. */
@@ -151,10 +154,13 @@ class TrackingViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(sessionStartMs = id)
         }
         clearSelection()
+        Log.d("tanmay", "createSessionIfAbsent: $sessionId")
+        toggleSessionSelection(_sessionId.value!!)
         _uiState.value = TrackingUiState()
 
         Log.d("tanmay", "createSessionIfAbsent: ${sessionId.value}")
     }
+    //1757617840252
 
     @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
     fun startGettingLocation() {
@@ -255,7 +261,7 @@ class TrackingViewModel @Inject constructor(
 //            speed = location.speed * 3.6,
 //            avgSpeed = if (elapsedHrs > 0) (totalDistance / 1000.0) / elapsedHrs else 0.0
 //        )
-        Log.d("tanmay", "handleNewLocation: ${_uiState.value.sessionStartMs}")
+//        Log.d("tanmay", "handleNewLocation: ${_uiState.value.sessionStartMs}")
 
 
     }
@@ -278,6 +284,8 @@ class TrackingViewModel @Inject constructor(
     // }
 
     fun openSessionBySessionId(sid: Long) {
+        Log.d("tanmay", "openSessionBySessionId: $sid")
+
         viewModelScope.launch {
             val locations = repo.getSessionLocations(sid).first()
             Log.d("tanmay", "openSession: ${locations.first()}")
@@ -318,7 +326,6 @@ class TrackingViewModel @Inject constructor(
         )
         setSessionId(null)
         lastLatLngForPolyline = null
-        _isServiceStarted.value = false
     }
 
     fun deleteSession(sessionId: Long) {

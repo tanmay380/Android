@@ -52,7 +52,7 @@ class LocationProvider @Inject constructor(
 
     @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
     fun startUpdates() {
-        Log.d("tanmay", "startUpdates: $callback")
+        Log.d("tanmay", "Lcoation Provider startUpdates: $callback")
         if (callback != null) return
         callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {

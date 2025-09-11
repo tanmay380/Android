@@ -34,7 +34,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -80,7 +82,10 @@ class LocationService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d("tanmay", "Session ID received: $currentSessionId")
+        // It might be better to set _isServiceRunning to true in startLocationUpdates
+        // or when actual work begins, depending on the definition of "running".
+        // For now, onCreate covers the service's existence.
+        Log.d("tanmay", "onStartCommand: ")
         return START_STICKY // Or START_NOT_STICKY / START_REDELIVER_INTENT depending on needs
     }
 
@@ -134,6 +139,7 @@ class LocationService : Service() {
             locationCallback,
             Looper.getMainLooper()
         )
+        _isServiceRunning.value = true // Explicitly set when updates start
         Log.d("tanmay", "Location updates started.")
     }
 
@@ -141,9 +147,9 @@ class LocationService : Service() {
         override fun onLocationResult(result: LocationResult) {
             val loc = result.lastLocation ?: return
 
-            Log.d("tanmay", "onLocationResult: sending data")
+//            Log.d("tanmay", "onLocationResult: sending data")
 
-            Log.d("tanmay", "handleNewLocation: latitiude ${loc.latitude} long${loc.longitude}")
+//            Log.d("tanmay", "handleNewLocation: latitiude ${loc.latitude} long${loc.longitude}")
 
 
             val entity = LocationEntity(
@@ -213,8 +219,8 @@ class LocationService : Service() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         Log.d("tanmay", "Service destroyed and location updates stopped.")
+        super.onDestroy()
         fusedLocationClient.removeLocationUpdates(locationCallback)
         stopForeground(STOP_FOREGROUND_REMOVE)
         serviceJob.cancel() // Cancel coroutines when service is destroyed
@@ -223,7 +229,12 @@ class LocationService : Service() {
             .edit {
                 remove(Constants.PREF_ACTIVE_SESSION)
             }
+        _isServiceRunning.value = false // Service is no longer running
         stopSelf()
     }
 
+    companion object {
+        private val _isServiceRunning = MutableStateFlow(false)
+        val isServiceRunning: SharedFlow<Boolean> = _isServiceRunning.asStateFlow()
+    }
 }

@@ -48,6 +48,8 @@ class MainActivity : ComponentActivity() {
     private var isBound = false
     private var updatesJob: Job? = null
 
+    private var isServiceRunning  = false
+
 
     // Queue one-shot work that should run as soon as we're bound
     private var pendingAction: ((LocationService) -> Unit)? = null
@@ -149,13 +151,38 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startAndBindService() {
-        Log.d(TAG, "startAndBindService: ")
-        val intent = Intent(this, LocationService::class.java)
-        // Start in STARTED mode first so it survives when Activity unbinds/minimizes
-        ContextCompat.startForegroundService(this, intent)
-        // Then bind for UI streaming
-        bindService(intent, connection, Context.BIND_AUTO_CREATE)
+    private fun handleIntentForSession(intent: Intent?) {
+
+        val sidFromIntent = intent?.getLongExtra("EXTRA_SESSION_ID", -1L) ?: -1L
+        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val sidFromPrefs = prefs.getLong(PREF_ACTIVE_SESSION, -1L)
+
+        Log.d(TAG, "handleIntentForSession: $sidFromPrefs   $sidFromIntent")
+        val restoredSessionId = when {
+            sidFromIntent > 0L -> sidFromIntent
+            sidFromPrefs > 0L -> sidFromPrefs
+            else -> -1L
+        }
+
+        Log.d(TAG, "handleIntentForSession: $restoredSessionId")
+
+        if (restoredSessionId > 0L) {
+            viewModel.setSessionId(restoredSessionId)
+            viewModel.openSessionBySessionId(restoredSessionId)
+            // ensure we bind so the viewModel starts receiving live updates from service
+            startService() // optionally start/bind if you want to reattach
+        } else {
+            // no active session — viewModel stays without session until user starts one
+        }
+
+    }
+
+    override fun onPause() {
+        super.onPause()
+        updatesJob?.cancel()
+        unbindService(connection)
+        isBound = false
+        boundService = null
     }
 
     // --- Lifecycle cleanup ---
@@ -169,35 +196,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onStart() {
-        super.onStart()
-        if (!isBound) {
-//            startAndBindService()
-        }
-    }
-
-    private fun handleIntentForSession(intent: Intent?) {
-        val sidFromIntent = intent?.getLongExtra("EXTRA_SESSION_ID", -1L) ?: -1L
-        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val sidFromPrefs = prefs.getLong(PREF_ACTIVE_SESSION, -1L)
-
-        val restoredSessionId = when {
-            sidFromIntent > 0L -> sidFromIntent
-            sidFromPrefs > 0L -> sidFromPrefs
-            else -> -1L
-        }
-
-        Log.d(TAG, "handleIntentForSession: $restoredSessionId")
-
-        if (restoredSessionId > 0L) {
-            viewModel.setSessionId(restoredSessionId)
-            viewModel.openSessionBySessionId(restoredSessionId)
-            // ensure we bind so the viewModel starts receiving live updates from service
-            startAndBindService() // optionally start/bind if you want to reattach
-        } else {
-            // no active session — viewModel stays without session until user starts one
-        }
-
+    override fun onResume() {
+        super.onResume()
+        startService()
     }
 
     // If you want reopen-from-notification to rebind (without auto-starting a new service):
