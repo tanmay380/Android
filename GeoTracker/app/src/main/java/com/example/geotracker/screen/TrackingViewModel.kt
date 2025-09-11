@@ -341,7 +341,7 @@ private fun TrackingViewModel.createRoutePoints(entity: Location) {
     val point = RoutePoint(
         lat = entity.latitude,
         lng = entity.longitude,
-        speed = entity.speed,
+        speed = entity.speed * 3.6,
         timestamp = entity.time,
 //        distanceClicked =
     )
