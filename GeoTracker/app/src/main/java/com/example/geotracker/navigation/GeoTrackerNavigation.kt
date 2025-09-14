@@ -20,6 +20,7 @@ import com.example.geotracker.location.service.LocationService
 import com.example.geotracker.screen.TrackingScreen
 import com.example.geotracker.screen.TrackingViewModel
 import com.example.permissions.PermissionGateSequential
+import kotlinx.serialization.Serializable
 
 @Composable
 fun GeoTrackerNavigation(
@@ -51,6 +52,8 @@ fun GeoTrackerNavigation(
                 }
             }
             composable("Details Screen") {
+                Log.d(TAG, "GeoTrackerNavigation: " +
+                        "${navController.previousBackStackEntry?.savedStateHandle?.get<Set<Long>>("selectedId")?.size}")
                 DetailsScreen()
             }
         }

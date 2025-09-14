@@ -6,4 +6,7 @@ plugins {
     alias(libs.plugins.hilt.android.gradle.plugin) apply false // Added Hilt plugin
     alias(libs.plugins.ksp) apply false // Added KSP for Room
     alias(libs.plugins.kotlin.kapt) apply false // Added KAPT for Hilt
+
+    kotlin("plugin.serialization") version "2.2.10" apply false
+
 }

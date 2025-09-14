@@ -105,6 +105,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import metersPerPixel
 import minPixelDistanceToPolyline
+import kotlin.collections.toLongArray
 
 
 @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -169,7 +170,7 @@ fun TrackingScreen(
     }
     var googleMapRef by remember { mutableStateOf<GoogleMap?>(null) }
 
-    var selectedId by remember { mutableStateOf<Set<Long?>>(emptySet()) }
+    var selectedId by remember { mutableStateOf<Set<Long>>(emptySet()) }
 
     // get screen size to compute padding dynamically
     val config = LocalConfiguration.current
@@ -329,7 +330,7 @@ fun TrackingScreen(
             .background(MaterialTheme.colorScheme.background)
     ) {
         AppWithDrawer(viewModel) { drawerState, set ->
-            selectedId = set
+            selectedId = set as Set<Long>
             BottomSheetScaffold(
                 sheetPeekHeight = 40.dp,
                 scaffoldState = state,
@@ -347,7 +348,19 @@ fun TrackingScreen(
                                 Row() {
                                     Button(
                                         onClick = {
+                                            navController.currentBackStackEntry?.savedStateHandle?.set("selectedId", selectedId)
                                             navController.navigate("Details Screen")
+
+// Debug dump (run after navigate or in the destination):
+                                            navController.currentBackStack.value.forEach { entry ->
+                                                Log.d("tanmay", "BACKQUEUE: route=${entry.destination.route}  id=${entry.id}  keys=${entry.savedStateHandle.keys()}")
+                                            }
+                                            Log.d("tanmay", "current route=${navController.currentBackStackEntry?.destination?.route}")
+                                            Log.d("tanmay", "previous route=${navController.previousBackStackEntry?.destination?.route}")
+                                            Log.d("tanmay", "current keys=${navController.currentBackStackEntry?.savedStateHandle?.keys()}")
+                                            Log.d("tanmay", "previous keys=${navController.previousBackStackEntry?.savedStateHandle?.keys()}")
+                                            Log.d(TAG, "TrackingScreen: ${selectedId.size}")
+    //                                            navController.navigate(DetailsScreenSelectedInfo(selectedId))
                                         },
                                         modifier = Modifier.padding(8.dp),
                                         shape = RoundedCornerShape(100.dp),

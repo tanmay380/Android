@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.ksp) // For Room
     alias(libs.plugins.kotlin.kapt) // For Hilt
     alias(libs.plugins.hilt.android.gradle.plugin)
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.10"
 }
 
 android {
