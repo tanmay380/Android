@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.play.services.location)
     implementation(libs.androidx.runtime.saveable)
+    implementation(libs.androidx.navigation.runtime.ktx)
     ksp(libs.androidx.room.compiler) // Room uses KSP
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
@@ -71,7 +72,9 @@ dependencies {
 
     // Hilt dependencies
     implementation(libs.hilt.android)
+    implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
     kapt(libs.hilt.compiler) // Hilt now uses KAPT
+    implementation("androidx.navigation:navigation-compose:$2.9.4")
 
     implementation("androidx.compose.material:material-icons-extended-android:1.7.8")
     implementation("androidx.compose.material3:material3-window-size-class:1.3.2")

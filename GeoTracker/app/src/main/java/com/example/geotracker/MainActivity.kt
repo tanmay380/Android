@@ -17,13 +17,19 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import androidx.navigation.compose.rememberNavController
 import com.example.geotracker.screen.TrackingScreen
 import com.example.geotracker.screen.TrackingViewModel
 import com.example.geotracker.location.service.LocationService
+import com.example.geotracker.navigation.GeoTrackerNavigation
 import com.example.geotracker.ui.theme.GeoTrackerTheme
 import com.example.geotracker.utils.Constants.PREFS
 import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
@@ -44,7 +50,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val viewModel: TrackingViewModel by viewModels()
-    private var boundService: LocationService? = null
+   /* private var boundService: LocationService? = null
     private var isBound = false
     private var updatesJob: Job? = null
 
@@ -82,19 +88,26 @@ class MainActivity : ComponentActivity() {
             isBound = false
             boundService = null
         }
-    }
+    }*/
 
     @SuppressLint("MissingPermission")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         MapsInitializer.initialize(applicationContext)
-        handleIntentForSession(intent)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+// Set nav bar color (use theme color)
+        window.navigationBarColor = Color(0xFF121212).toArgb() // or transparent if root draws background
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars = false
+
 
         setContent {
             GeoTrackerTheme {
-//                ensurePermissionsIfYouNeedTo()
-                PermissionGateSequential {
+                GeoTrackerNavigation(
+                    rememberNavController(),
+                    "Main Screen Route"
+                )
+                /*PermissionGateSequential {
 
                     TrackingScreen(
 
@@ -115,6 +128,8 @@ class MainActivity : ComponentActivity() {
                             viewModel.sessionStopped()
                             unbindService(connection)
                             stopService(Intent(this, LocationService::class.java))
+                            viewModel.startGettingLocation()
+
                         },
                         // 👉 ONE-SHOT: get current location on demand
                         onMyLocationClick = {
@@ -124,7 +139,7 @@ class MainActivity : ComponentActivity() {
                             // ensure service exists & bound (no-op if already)
                         }
                     )
-                }
+                }*/
 
 //                startAndBindService()
             }
@@ -133,90 +148,83 @@ class MainActivity : ComponentActivity() {
         // If you still run a permission gate, call it here; do NOT auto-start/bind in onStart.
     }
 
-    private fun startService() {
-        val intent = Intent(this, LocationService::class.java)
-        // Start in STARTED mode first so it survives when Activity unbinds/minimizes
-        ContextCompat.startForegroundService(this, intent)
-        // Then bind for UI streaming
-        bindService(intent, connection, BIND_AUTO_CREATE)
-    }
-
-    /** Run [action] immediately if bound, otherwise queue it and bind now. */
-    private fun pendingOrNow(action: (LocationService) -> Unit) {
-        val svc = boundService
-        if (svc != null) {
-            action(svc)
-        } else {
-            pendingAction = action
-        }
-    }
-
-    private fun handleIntentForSession(intent: Intent?) {
-
-        val sidFromIntent = intent?.getLongExtra("EXTRA_SESSION_ID", -1L) ?: -1L
-        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val sidFromPrefs = prefs.getLong(PREF_ACTIVE_SESSION, -1L)
-
-        Log.d(TAG, "handleIntentForSession: $sidFromPrefs   $sidFromIntent")
-        val restoredSessionId = when {
-            sidFromIntent > 0L -> sidFromIntent
-            sidFromPrefs > 0L -> sidFromPrefs
-            else -> -1L
-        }
-
-        Log.d(TAG, "handleIntentForSession: $restoredSessionId")
-
-        if (restoredSessionId > 0L) {
-            viewModel.setSessionId(restoredSessionId)
-            viewModel.openSessionBySessionId(restoredSessionId)
-            // ensure we bind so the viewModel starts receiving live updates from service
-            startService() // optionally start/bind if you want to reattach
-        } else {
-            // no active session — viewModel stays without session until user starts one
-        }
-
-    }
-
-    override fun onPause() {
-        super.onPause()
-        updatesJob?.cancel()
-        unbindService(connection)
-        isBound = false
-        boundService = null
-    }
+//    private fun startService() {
+//        val intent = Intent(this, LocationService::class.java)
+//        // Start in STARTED mode first so it survives when Activity unbinds/minimizes
+//        ContextCompat.startForegroundService(this, intent)
+//        // Then bind for UI streaming
+//        bindService(intent, connection, BIND_AUTO_CREATE)
+//    }
+//
+//    //** Run [action] immediately if bound, otherwise queue it and bind now. *//*
+//    private fun pendingOrNow(action: (LocationService) -> Unit) {
+//        val svc = boundService
+//        if (svc != null) {
+//            action(svc)
+//        } else {
+//            pendingAction = action
+//        }
+//    }
+//
+//    private fun handleIntentForSession(intent: Intent?) {
+//
+//        val sidFromIntent = intent?.getLongExtra("EXTRA_SESSION_ID", -1L) ?: -1L
+//        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+//        val sidFromPrefs = prefs.getLong(PREF_ACTIVE_SESSION, -1L)
+//
+//        Log.d(TAG, "handleIntentForSession: $sidFromPrefs   $sidFromIntent")
+//        val restoredSessionId = when {
+//            sidFromIntent > 0L -> sidFromIntent
+//            sidFromPrefs > 0L -> sidFromPrefs
+//            else -> -1L
+//        }
+//
+//        Log.d(TAG, "handleIntentForSession: $restoredSessionId")
+//
+//        if (restoredSessionId > 0L) {
+//            viewModel.setSessionId(restoredSessionId)
+//            viewModel.openSessionBySessionId(restoredSessionId)
+//            // ensure we bind so the viewModel starts receiving live updates from service
+//            startService() // optionally start/bind if you want to reattach
+//        } else {
+//            // no active session — viewModel stays without session until user starts one
+//        }
+//
+//    }
+//
+//    override fun onPause() {
+//        super.onPause()
+//        viewModel.unbindService()
+//    }
 
     // --- Lifecycle cleanup ---
     override fun onDestroy() {
         super.onDestroy()
-        updatesJob?.cancel()
-        if (isBound) {
-            unbindService(connection)
-            isBound = false
-            boundService = null
-        }
+        viewModel.stopService()
     }
 
     override fun onResume() {
         super.onResume()
-        startService()
+
+//        handleIntentForSession(intent)
     }
 
     // If you want reopen-from-notification to rebind (without auto-starting a new service):
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-
-        Log.d(TAG, "onNewIntent: $isBound")
-        viewModel.isFromIntent.value = true
-        if (!isBound) {
-            // Only bind; do NOT call startForegroundService here
-            bindService(
-                Intent(this, LocationService::class.java),
-                connection,
-                Context.BIND_AUTO_CREATE
-            )
-        }
-        handleIntentForSession(intent)
-    }
+//    override fun onNewIntent(intent: Intent) {
+//        super.onNewIntent(intent)
+//
+//        Log.d(TAG, "onNewIntent: $isBound")
+//        viewModel.isFromIntent.value = true
+//        if (!isBound) {
+//            // Only bind; do NOT call startForegroundService here
+//            bindService(
+//                Intent(this, LocationService::class.java),
+//                connection,
+//                Context.BIND_AUTO_CREATE
+//            )
+//        }
+//        handleIntentForSession(intent)
+//    }
 
     // ---- Permissions (keep whatever you had; just don't auto-start service here) ----
     @OptIn(ExperimentalPermissionsApi::class)

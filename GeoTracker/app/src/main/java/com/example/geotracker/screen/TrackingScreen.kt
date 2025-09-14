@@ -1,10 +1,14 @@
 package com.example.geotracker.screen
 
+import android.Manifest
 import android.content.Context
 import android.util.Log
 import android.widget.Toast
+import androidx.annotation.RequiresPermission
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +20,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -27,7 +30,8 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material3.BottomSheetScaffold
 import androidx.compose.material3.BottomSheetScaffoldState
-import androidx.compose.material3.Card
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FloatingActionButton
@@ -35,6 +39,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
@@ -46,7 +51,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,21 +68,23 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.translationMatrix
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import com.example.geotracker.MainActivity.Companion.TAG
 import com.example.geotracker.R
+import com.example.geotracker.components.ElapsedTimerText
+import com.example.geotracker.components.SelectedPointCard
 import com.example.geotracker.location.service.LocationService
 import com.example.geotracker.model.RoutePoint
+import com.example.geotracker.model.TrackingUiState
 import com.example.geotracker.ui.theme.primaryLightHighContrast
-import com.example.geotracker.utils.Utils
 import com.example.geotracker.utils.Utils.bitmapDescriptorFromVector
-import com.example.geotracker.utils.Utils.formatDuration
 import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
+import com.google.android.gms.maps.Projection
 import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.RoundCap
@@ -97,18 +103,21 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import metersPerPixel
+import minPixelDistanceToPolyline
 
 
+@RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
 @OptIn(MapsComposeExperimentalApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TrackingScreen(
     viewModel: TrackingViewModel,
-    onMyLocationClick: () -> Unit,
-    stopService: () -> Unit,
-    startOrStopService: () -> Unit,
+    navController: NavController
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val state = rememberBottomSheetScaffoldState()
+
+    val routePoints by viewModel.routePoints.collectAsState()
 
     val selectedPointRoute by viewModel.selectedPoint.collectAsState()
 
@@ -116,7 +125,9 @@ fun TrackingScreen(
         mutableStateOf(true)
     }
 
-    var myLocationClicked = false
+    var myLocationClicked by remember {
+        mutableStateOf(false)
+    }
 
     val context = LocalContext.current
 
@@ -136,10 +147,21 @@ fun TrackingScreen(
     val isServiceStarted by
     LocationService.isServiceRunning.collectAsStateWithLifecycle(false)
 
+    val onMyLocationClick = { viewModel.startGettingLocation() }
+    val stopService = {
+        viewModel.sessionStopped()
+        viewModel.unbindService()
+        viewModel.stopService()
+
+    }
+    val startOrStopService = {
+        viewModel.startAndBindService()
+        viewModel.createSessionIfAbsent()
+
+        viewModel.pendingOrNow { svc -> svc.startLocationUpdates(viewModel.sessionId.value!!) }
+    }
 
     val density = LocalDensity.current
-
-    var sheetHeightPx by remember { mutableStateOf(0f) }
 
     val scope = rememberCoroutineScope()
     var hideJob by remember {
@@ -149,30 +171,28 @@ fun TrackingScreen(
 
     var selectedId by remember { mutableStateOf<Set<Long?>>(emptySet()) }
 
-    var isFirstClickOnSelectedid by remember(selectedId) {
-        mutableStateOf(true)
-    }
-    val lastLocation by rememberSaveable {
-        mutableStateOf<LatLng>(uiState.currentLatLng)
-    }
-
     // get screen size to compute padding dynamically
     val config = LocalConfiguration.current
     val screenWidthPx = with(density) { config.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
 
     LaunchedEffect(true) {
-        Log.d(TAG, "TrackingScreen: is sercide started")
-        if (isServiceStarted){
+        if (isServiceStarted) {
             Log.d(TAG, "TrackingScreen: ${uiState.sessionStartMs}")
             viewModel.toggleSessionSelection(viewModel.sessionId.value!!)
         }
     }
 
+    LaunchedEffect(selectedId) {
+        if (isServiceStarted && selectedId.size < 2) return@LaunchedEffect
+        followMode = false
+    }
+
     // While in follow mode, keep camera centered on each incoming location
     LaunchedEffect(followMode, isMapLoaded, myLocationClicked) {
-        Log.d("tanmay", "TrackingScreen: followmode and location clicked $followMode  $myLocationClicked")
         if (!followMode || !isMapLoaded) return@LaunchedEffect
+
+        if (myLocationClicked) myLocationClicked = false
 
         snapshotFlow { uiState.currentLatLng }
             .filter { it.latitude != 0.0 || it.longitude != 0.0 } // ignore no-fix
@@ -183,7 +203,9 @@ fun TrackingScreen(
                 (dLat * dLat + dLng * dLng) < 1e-10
             }
             .collectLatest { ll ->
-//                Log.d(TAG, "TrackingScreen: snapshot flow")
+                if (!followMode) return@collectLatest
+                if ((!isServiceStarted && selectedId.isNotEmpty() && !followMode)) return@collectLatest
+
                 if (firstFix) {
                     cameraState.move(CameraUpdateFactory.newLatLngZoom(ll, userZoom))
                     firstFix = false
@@ -197,23 +219,28 @@ fun TrackingScreen(
     }
 
     LaunchedEffect(isMapLoaded, selectedId) {
-        val points = uiState.routePoints
+
+        val points = routePoints
+
+//        Log.d(TAG, "TrackingScreen: $points")
         val maps = googleMapRef
 
-//        Log.d(TAG, "TrackingScreen: first clicm $isFirstClickOnSelectedid")
-        
+        Log.d(TAG, "TrackingScreen: show fill route launched effect")
+
         if (!isMapLoaded || maps == null) return@LaunchedEffect
 
-        if (points.isEmpty() || selectedId.isEmpty())  {
+        if (points.isEmpty() || selectedId.isEmpty()) {
             // nothing to do
             return@LaunchedEffect
         }
 
+
+        // for points
         if (points.size == 1) {
             val single = points.first()
             maps.animateCamera(
                 CameraUpdateFactory.newLatLngZoom(
-                    LatLng(single.latitude, single.longitude), 16f
+                    LatLng(single.lat, single.lng), 16f
                 )
             )
             return@LaunchedEffect
@@ -221,17 +248,17 @@ fun TrackingScreen(
 
         val builder = LatLngBounds.builder()
         points.forEach {
-//            Log.d(TAG, "TrackingScreen: ${it.longitude}, ${it.longitude}")
-            builder.include(LatLng(it.latitude, it.longitude)) }
+            builder.include(LatLng(it.lat, it.lng))
+
+
+        }
         val bounds = builder.build()
-        
+
 
         val paddingPx = (minOf(screenWidthPx, screenHeightPx) * 0.12f).toInt()
-//        Log.d(TAG, "TrackingScreen: bpunds $maps  \n $bounds"   )
-
+        Log.d(TAG, "TrackingScreen: $bounds")
+        maps.stopAnimation()
         maps.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, paddingPx))
-//        maps.stopAnimation()
-//        isFirstClickOnSelectedid = false
 
     }
 
@@ -258,284 +285,303 @@ fun TrackingScreen(
         }
     }
 
-    // runtime measured values
-    var containerHeightPx by remember { mutableStateOf(0f) }
-    var sheetTopY by remember { mutableStateOf(Float.POSITIVE_INFINITY) }
-    var fabHeightPx by remember { mutableStateOf(0f) }
-
     // visual params
     val bottomPaddingDp = 12.dp
-    val bottomPaddingPx = with(density) { bottomPaddingDp.toPx() }
-    val overlapFactor = 0.5f // how much the FAB overlaps the sheet (0..1)
-
-    val route = viewModel.routePoints.collectAsState().value
 
 
-    AppWithDrawer(viewModel) { drawerState, set ->
-        selectedId = set
-        BottomSheetScaffold(
-            sheetPeekHeight = 40.dp,
-            scaffoldState = state,
-            sheetContainerColor = Color.Black.copy(alpha = 0.4f),
-            sheetContentColor = Color.Transparent,
-            contentColor = Color.Transparent,
-            containerColor = Color.Transparent,
-            sheetDragHandle = {},
-            sheetShape = RoundedCornerShape(0.dp),
+    fun handleMapClick(
+        clickLatLng: LatLng,
+        polylines: List<RoutePoint>,     // your List<List<LatLng>>
+        projection: Projection,
+        zoom: Float,
+        viewModel: TrackingViewModel            // or whichever VM
+    ) {
+        var listIndex = -1
+        var bestIndex = -1
+        var bestPx = Float.MAX_VALUE
 
-            topBar = {
-                AnimatedVisibility(controlsVisible) {
-                    TopAppBar(
-                        title = {
-                            Row() {
+        val pair = minPixelDistanceToPolyline(clickLatLng, polylines, projection)
+        if (pair.first < bestPx) {
+            bestPx = pair.first
+            bestIndex = pair.second
+        }
 
-                                Text("this is a text")
-                                Text("this is another text")
-                            }
-                        },
-                        navigationIcon = {
-                            IconButton(onClick = {
-                                scope.launch {
-                                    drawerState.open()
 
+        if (bestIndex == -1) return
+
+        val mpp = metersPerPixel(clickLatLng.latitude, zoom.toDouble())
+        val distanceMeters = bestPx * mpp
+
+        Log.d(
+            TAG,
+            "handleMapClick: clicked lat long ${clickLatLng.latitude}  ${clickLatLng.longitude}  \n" +
+                    "${routePoints.get(bestIndex)}"
+        )
+        Log.d(TAG, "onMapTapped: $bestIndex   $distanceMeters")
+
+        // send result to ViewModel (only primitives)
+        viewModel.onMapTapped(bestIndex, distanceMeters)
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        AppWithDrawer(viewModel) { drawerState, set ->
+            selectedId = set
+            BottomSheetScaffold(
+                sheetPeekHeight = 40.dp,
+                scaffoldState = state,
+                sheetContainerColor = Color.Black.copy(alpha = 0.4f),
+                sheetContentColor = Color.Transparent,
+                contentColor = Color.Transparent,
+                containerColor = Color.Transparent,
+                sheetDragHandle = {},
+                sheetShape = RoundedCornerShape(0.dp),
+
+                topBar = {
+                    AnimatedVisibility(controlsVisible) {
+                        TopAppBar(
+                            title = {
+                                Row() {
+                                    Button(
+                                        onClick = {
+                                            navController.navigate("Details Screen")
+                                        },
+                                        modifier = Modifier.padding(8.dp),
+                                        shape = RoundedCornerShape(100.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = Color.Transparent
+                                        ),
+                                        border = BorderStroke(
+                                            2.dp,
+                                            Color.White.copy(alpha = 0.6f)
+                                        )
+                                    ) {
+                                        Text("Statistics", color = Color.White)
+                                    }
                                 }
-                            }) {
-                                Image(
-                                    imageVector = Icons.Outlined.Menu,
-                                    contentDescription = "Menu"
-                                )
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = {
+                                    scope.launch {
+                                        drawerState.open()
+
+                                    }
+                                }) {
+                                    Image(
+                                        imageVector = Icons.Outlined.Menu,
+                                        contentDescription = "Menu"
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = primaryLightHighContrast
+                            ),
+                            actions = {
+
                             }
+                        )
+
+
+                    }
+
+                },
+                sheetContent = {
+                    BootomScaffoldSheetContent(viewModel, uiState, state, isServiceStarted)
+
+                }) { padding ->
+                Box(
+                    Modifier
+                        .fillMaxSize()
+//                    .padding(padding)
+                ) {
+                    var lat by remember { mutableStateOf<Double?>(null) }
+                    var lng by remember { mutableStateOf<Double?>(null) }
+                    GoogleMap(
+                        modifier = Modifier.fillMaxSize(),
+                        cameraPositionState = cameraState,
+                        onMapLoaded = {
+                            isMapLoaded = true
+                            followMode = true
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = primaryLightHighContrast
+                        uiSettings = MapUiSettings(
+                            zoomControlsEnabled = false,
                         ),
-                        actions = {
+                        onMapClick = { latLng ->
+                            viewModel.clearSelectedPoint()
+                            resetControlsTimer(scope)
+                        },
+                        onMapLongClick = { latLng ->
+//                            Log.d(TAG, "TrackingScreen: $routePoints")
+                            handleMapClick(
+                                LatLng(latLng.latitude, latLng.longitude),
+                                routePoints,
+                                googleMapRef!!.projection,
+                                googleMapRef?.cameraPosition?.zoom!!,
+                                viewModel
+                            )
+
+                            lat = latLng.latitude
+                            lng = latLng.longitude
 
                         }
-                    )
 
+                    ) {
+                        MapEffect(Unit) { googleMap ->
+                            googleMapRef = googleMap
+                        }
+                        MapEffect(followMode) { googleMap: GoogleMap ->
+                            googleMap.setOnCameraMoveStartedListener { reason ->
+                                if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
+                                    followMode = false
+// Remember the zoom the user prefers while exploring
+                                    userZoom = cameraState.position.zoom
+                                }
+                            }
+                        }
 
-                }
+                        //for start point
+                        if (uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
+                            Marker(
+                                state = MarkerState(position = uiState.routePoints.first()),
+                                title = "Start",
+                                icon = bitmapDescriptorFromVector(
+                                    context,
+                                    R.drawable.outline_add_location_24
+                                )
+                            )
+                        } //1757858959243
+                        //for end point
+                        //for start point
+                        if (!isServiceStarted && uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
+//                            Log.d(TAG, "TrackingScreen: nside isservice started check")
+                            Marker(
+                                state = MarkerState(position = uiState.routePoints.last()),
+                                title = "Start",
+                                icon = bitmapDescriptorFromVector(
+                                    context,
+                                    R.drawable.baseline_stop_circle_24
+                                )
+                            )
+                        }
 
-            },
-            sheetContent = {
-                BootomScaffoldSheetContent(viewModel, uiState, state, isServiceStarted)
+                        if (uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
+//                            Log.d(TAG, "TrackingScreen: is service started $isServiceStarted")
+                            Polyline(
+                                points = uiState.routePoints,
+                                startCap = RoundCap(),
+                                width = 13f,
+                                color = if (isServiceStarted) Color.Green else
+                                    Color.Yellow
+                            )
+                        }
 
-            }) { padding ->
-            Box(
-                Modifier
-                    .fillMaxSize()
-//                    .padding(padding)
-            ) {
-                var lat by remember { mutableStateOf<Double?>(null) }
-                var lng by remember { mutableStateOf<Double?>(null) }
-                GoogleMap(
-                    modifier = Modifier.fillMaxSize(),
-                    cameraPositionState = cameraState,
-                    onMapLoaded = { isMapLoaded = true },
-                    uiSettings = MapUiSettings(
-                        zoomControlsEnabled = false,
-                    ),
-                    onMapClick = { latLng ->
-                        resetControlsTimer(scope)
-                    },
-                    onMapLongClick = { latLng ->
-                        viewModel.onMapTapped(latLng.latitude, latLng.longitude)
-                        lat = latLng.latitude
-                        lng = latLng.longitude
+//                        Log.d(TAG, "TrackingScreen: ${uiState.displayPolylines}")
 
+                        uiState.displayPolylines.forEach {
+                            if (it.isEmpty()) return@forEach
+                            Polyline(
+                                points = it,
+                                startCap = RoundCap(),
+                                width = 13f,
+                                color = Color.Yellow
+                            )
+                            Marker(
+                                state = MarkerState(position = it.first()),
+                                title = "Start",
+                                icon = bitmapDescriptorFromVector(
+                                    context,
+                                    R.drawable.outline_add_location_24
+                                )
+                            )
+                            Marker(
+                                state = MarkerState(position = it.last()),
+                                title = "Start",
+                                icon = bitmapDescriptorFromVector(
+                                    context,
+                                    R.drawable.baseline_stop_circle_24
+                                )
+                            )
 
+                        }
+//                    }
+
+                        Marker(
+                            state = MarkerState(position = uiState.currentLatLng),
+                            icon = bitmapDescriptorFromVector(
+                                context,
+                                R.drawable.img, // my current location maker
+                                20, 20
+                            ),
+                            rotation = uiState.bearing
+                        )
+                        if (selectedPointRoute != null) {
+                            Marker(
+                                state = MarkerState(
+                                    position = LatLng(
+                                        lat!!,
+                                        lng!!
+                                    )
+                                ),
+                                onClick = { true },
+                                title = "Selected",
+                                icon = bitmapDescriptorFromVector(
+                                    context,
+                                    R.drawable.outline_add_location_24
+                                )
+                            )
+                            // SelectedPointCard MOVED FROM HERE
+                        }
+                    } // GoogleMap ends
+
+                    // SelectedPointCard MOVED TO HERE, wrapped in its conditional
+                    if (selectedPointRoute != null) {
                         Log.d(
                             TAG,
-                            "TrackingScreen: on map clocked ${selectedPointRoute?.distanceClicked}"
+                            "TrackingScreen: on map clocked $selectedPointRoute"
                         )
 
 
+                        SelectedPointCard(selectedPointRoute!!, context)
                     }
-
-                ) {
-                    MapEffect(Unit) { googleMap ->
-                        googleMapRef = googleMap
-                    }
-                    MapEffect(followMode) { googleMap: GoogleMap ->
-                        googleMap.setOnCameraMoveStartedListener { reason ->
-                            if (reason == GoogleMap.OnCameraMoveStartedListener.REASON_GESTURE) {
-                                followMode = false
-// Remember the zoom the user prefers while exploring
-                                userZoom = cameraState.position.zoom
-                            }
-                        }
-                    }
-//                    Log.d(TAG, "TrackingScreen: ui sate riues ${uiState.routePoints?.size}")
-                    if (uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
-                        Marker(
-                            state = MarkerState(position = uiState.routePoints.first()),
-                            title = "Start",
-                            icon = bitmapDescriptorFromVector(
-                                context,
-                                R.drawable.outline_add_location_24
-                            )
-                        )
-                    }
-//                    Log.d(TAG, "TrackingScreen: $selectedId")
-                    if (uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
-                        Polyline(
-                            points = uiState.routePoints,
-                            startCap = RoundCap(),
-                            width = 13f
-                        )
-                    }
-
-                    Marker(
-                        state = MarkerState(position = uiState.currentLatLng),
-                        icon = bitmapDescriptorFromVector(
-                            context,
-                            R.drawable.img, // my current location maker
-                            20, 20
-                        ),
-                        rotation = uiState.bearing
-                    )
-                    if (selectedPointRoute != null) {
-                        Marker(
-                            state = MarkerState(
-                                position = LatLng(
-                                    lat!!,
-                                    lng!!
-                                )
-                            ),
-                            onClick = { true },
-                            title = "Selected",
-                            icon = bitmapDescriptorFromVector(
-                                context,
-                                R.drawable.outline_add_location_24
-                            )
-                        )
-                        // SelectedPointCard MOVED FROM HERE
-                    }
-                } // GoogleMap ends
-
-                // SelectedPointCard MOVED TO HERE, wrapped in its conditional
-                if (selectedPointRoute != null) {
-                    Log.d(
-                        TAG,
-                        "TrackingScreen: on map clocked ${selectedPointRoute?.distanceClicked}"
-                    )
-
-
-                    SelectedPointCard(selectedPointRoute!!, context)
                 }
             }
+            val onEFABClick = remember(onMyLocationClick) {
+                {// Key on onMyLocationClick if it's a dependency
+                    onMyLocationClick()      // Call your existing general map centering logic
+                    followMode = true        // Update followMode state in TrackingScreen
+                    myLocationClicked = true
+                    Unit
+                }// Update myLocationClicked state in TrackingScreen (if still used this way)
+            }
+
+            MyLocationServiceStartComposable(
+                controlsVisible,
+                sheetOffset,
+                screenHeightPx,
+                onEFABClick,
+                myLocationClicked,
+                isServiceStarted,
+                startOrStopService = {
+                    startOrStopService()
+                    viewModel.setServiceStarted()
+                    followMode = true
+                },
+                viewModel,
+                stopService = { // Modified line
+                    stopService() // Calls the original stopService from TrackingScreen's parameters
+                    followMode = false // Sets the local followMode state
+                },
+                coroutineScope,
+                followMode1 = followMode,
+                context
+            )
         }
-        val onEFABClick = remember(onMyLocationClick) {
-            {// Key on onMyLocationClick if it's a dependency
-                onMyLocationClick()      // Call your existing general map centering logic
-                followMode = true        // Update followMode state in TrackingScreen
-                Log.d("TrackingScreen", "EFAB Clicked: followMode=true, myLocationClicked=true")
-                myLocationClicked = true
-                Unit
-            }// Update myLocationClicked state in TrackingScreen (if still used this way)
-        }
-
-        MyLocationServiceStartComposable(
-            controlsVisible,
-            sheetOffset,
-            screenHeightPx,
-            onEFABClick,
-            myLocationClicked,
-            isServiceStarted,
-            startOrStopService,
-            viewModel,
-            stopService,
-            coroutineScope,
-            followMode1 = followMode,
-            context
-        )
-
-
     }
 }
 
-/*@Composable
-private fun MyLocationServiceStartComposable(
-    controlsVisible: Boolean,
-    sheetOffset: Float,
-    screenHeightPx: Float,
-    onMyLocationClick: () -> Unit,
-    myLocationClicked: Boolean,
-    isServiceStarted: Boolean,
-    startOrStopService: () -> Unit,
-    viewModel: TrackingViewModel,
-    stopService: () -> Unit,
-    coroutineScope: CoroutineScope,
-    followMode1: Boolean,
-    context: Context
-): Unit{
-
-    val followMode = remember {
-        followMode1
-    }
-
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        AnimatedVisibility(
-            controlsVisible,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp),
-
-            ) {
-//                    val offset = state.bottomSheetState.requireOffset()
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .offset({
-                        IntOffset(
-                            x = 0,
-                            y = (sheetOffset - screenHeightPx + 70).toInt()
-                        )
-                    }),
-                verticalArrangement = Arrangement.spacedBy(12.dp), // gap between buttons
-                horizontalAlignment = Alignment.End
-            ) {
-                ExtendedFloatingActionButton(
-                    onClick = onMyLocationClick,
-                    icon = {
-                        Icon(
-                            Icons.Filled.MyLocation,
-                            contentDescription = "My Location"
-                        )
-                    },
-                    text = { Text(if (followMode) "Following" else "My Location") }
-                )
-
-                FloatingActionButton(
-                    onClick = {
-                        if (!isServiceStarted) {
-                            startOrStopService()
-                            viewModel.setServiceStarted()
-                        } else {
-                            stopService()
-                        }
-                        coroutineScope.launch {
-                            Toast.makeText(
-                                context,
-                                "$isServiceStarted",
-                                Toast.LENGTH_SHORT
-                            ).show()
-
-                        }
-                    },
-                ) {
-                    Image(
-                        imageVector = if (!isServiceStarted) Icons.Filled.PlayArrow else
-                            Icons.Filled.Stop, contentDescription = "Start/Stop"
-                    )
-//                    Log.d(TAG, "MyLocationServiceStartComposable: $isServiceStarted")
-                }
-            }
-        }
-    }
-}*/
 
 @Composable
 private fun MyLocationServiceStartComposable(
@@ -555,7 +601,7 @@ private fun MyLocationServiceStartComposable(
     // keep a *stable* copy of the callback and followMode so child composables
     // can be remembered without changing identity each recomposition
     val onMyLocationClickState by rememberUpdatedState(onMyLocationClick)
-    val followModeState by rememberUpdatedState(followMode1)
+
 
     // compute translationY once per change (no heavy layout)
     val translationY by remember(sheetOffset, screenHeightPx) {
@@ -579,7 +625,7 @@ private fun MyLocationServiceStartComposable(
                 stopService = stopService,
                 coroutineScope = coroutineScope,
                 context = context,
-                followMode = followModeState
+                followMode = followMode1
             )
         }
     }
@@ -616,19 +662,17 @@ private fun FloatingControlsColumn(
             onClick = {
                 if (!isServiceStarted) {
                     startOrStopService()
-                    viewModel.setServiceStarted()
                 } else {
                     stopService()
                 }
                 // logging & toast are in click handler — OK here because it's not every compose
                 coroutineScope.launch {
-                    Toast.makeText(context, "$isServiceStarted", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, "dfdfdf", Toast.LENGTH_SHORT).show()
                 }
             }
         ) {
             val image = if (!isServiceStarted) Icons.Filled.PlayArrow else Icons.Filled.Stop
             Image(imageVector = image, contentDescription = "Start/Stop")
-            // removed Log.d from the composition body
         }
     }
 }
@@ -815,40 +859,3 @@ private fun RowScope.StatColumnInline(headline: String, subtext: String, weight:
     }
 }
 
-
-@Composable
-private fun ElapsedTimerText(sessionStartMs: Long): String {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-//    Log.d(TAG, "TrackingScreen session vlue: ${sessionStartMs}")
-
-
-    // Tick every second
-    LaunchedEffect(sessionStartMs) {
-        while (true) {
-            now = System.currentTimeMillis()
-            delay(1000)
-        }
-    }
-    if (sessionStartMs > 0) {
-        val elapsed = now - sessionStartMs
-        val text =
-            if (elapsed > 0) formatDuration(elapsed) else "Time: 00:00:00"
-        return text
-    }
-    return "--"
-}
-
-@Composable
-fun SelectedPointCard(selected: RoutePoint?, context: Context) {
-    selected ?: return
-    Card(modifier = Modifier.padding(12.dp)) {
-        Column(Modifier.padding(8.dp)) {
-            Text("Lat: ${"%.6f".format(selected.lat)}")
-            Text("Lng: ${"%.6f".format(selected.lng)}")
-            Text("Speed: ${"%.1f".format(selected.speed)} kmph")
-            Text("time : ${Utils.formatEpoch(selected.timestamp)} ")
-            Text("distance: ${selected.distanceClicked}")
-            // add timestamp etc.
-        }
-    }
-}
