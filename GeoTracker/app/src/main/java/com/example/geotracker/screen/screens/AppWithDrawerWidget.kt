@@ -1,5 +1,6 @@
-package com.example.geotracker.screen
+package com.example.geotracker.screen.screens
 
+import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,8 +49,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.geotracker.MainActivity.Companion.TAG
 import com.example.geotracker.R
 import com.example.geotracker.components.SessionSummary
+import com.example.geotracker.screen.viewmodel.SharedViewModel
+import com.example.geotracker.screen.viewmodel.TrackingViewModel
 import com.example.geotracker.utils.Utils.formatDuration
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -58,11 +62,14 @@ import java.util.Locale
 @Composable
 fun AppWithDrawer(
     viewModel: TrackingViewModel,
+    sharedViewModel: SharedViewModel,
     content: @Composable (drawerState: DrawerState, selectedId: Set<Long?>) -> Unit
 ) {
     val summaries by viewModel.sessionSummary.collectAsState()
 //    Log.d("tanmay", "AppWithDrawer: $summaries")
-    val selectedId by viewModel.selectedSessionId.collectAsState()
+    val selectedId by sharedViewModel.selectedSessionId.collectAsState()
+
+    Log.d(TAG, "AppWithDrawer: $selectedId")
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -120,7 +127,7 @@ fun AppWithDrawer(
                                     s,
                                     onClick = {
                                         // toggle selection and open the session (if you want both)
-                                        viewModel.toggleSessionSelection(s.sessionId)
+                                        viewModel.onSelectionToggles(s.sessionId)
                                     },
                                     isSelected = selectedId.contains(s.sessionId),
                                     viewModel = viewModel

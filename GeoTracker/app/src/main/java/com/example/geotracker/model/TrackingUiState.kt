@@ -4,7 +4,7 @@ import com.google.android.gms.maps.model.LatLng
 
 data class TrackingUiState(
     val currentLatLng: LatLng = LatLng(0.0, 0.0),
-    val routePoints: List<LatLng> = emptyList(),
+    val routePoints: List<LatLng> = emptyList(), // will only track if the service is active.
     val displayPolylines: List<List<LatLng>> = emptyList(),
     val distance: Double = 0.0,
     val speed: Double = 0.0,

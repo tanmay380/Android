@@ -1,4 +1,4 @@
-package com.example.geotracker.screen
+package com.example.geotracker.screen.screens
 
 import android.Manifest
 import android.content.Context
@@ -80,6 +80,8 @@ import com.example.geotracker.components.SelectedPointCard
 import com.example.geotracker.location.service.LocationService
 import com.example.geotracker.model.RoutePoint
 import com.example.geotracker.model.TrackingUiState
+import com.example.geotracker.screen.viewmodel.SharedViewModel
+import com.example.geotracker.screen.viewmodel.TrackingViewModel
 import com.example.geotracker.ui.theme.primaryLightHighContrast
 import com.example.geotracker.utils.Utils.bitmapDescriptorFromVector
 import com.google.android.gms.maps.CameraUpdateFactory
@@ -105,7 +107,6 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import metersPerPixel
 import minPixelDistanceToPolyline
-import kotlin.collections.toLongArray
 
 
 @RequiresPermission(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -113,7 +114,8 @@ import kotlin.collections.toLongArray
 @Composable
 fun TrackingScreen(
     viewModel: TrackingViewModel,
-    navController: NavController
+    navController: NavController,
+    sharedViewModel: SharedViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val state = rememberBottomSheetScaffoldState()
@@ -180,7 +182,7 @@ fun TrackingScreen(
     LaunchedEffect(true) {
         if (isServiceStarted) {
             Log.d(TAG, "TrackingScreen: ${uiState.sessionStartMs}")
-            viewModel.toggleSessionSelection(viewModel.sessionId.value!!)
+            viewModel.onSelectionToggles(viewModel.sessionId.value!!)
         }
     }
 
@@ -221,21 +223,24 @@ fun TrackingScreen(
 
     LaunchedEffect(isMapLoaded, selectedId) {
 
+        Log.d(TAG, "TrackingScreen: $selectedId")
+
         val points = routePoints
 
 //        Log.d(TAG, "TrackingScreen: $points")
         val maps = googleMapRef
 
-        Log.d(TAG, "TrackingScreen: show fill route launched effect")
-
-        if (!isMapLoaded || maps == null) return@LaunchedEffect
-
-        if (points.isEmpty() || selectedId.isEmpty()) {
-            // nothing to do
+        if (!isMapLoaded || maps == null)
+        {
+            Log.d(TAG, "TrackingScreen: not loaded")
             return@LaunchedEffect
         }
+        if (points.isEmpty() || selectedId.isEmpty()) {
+            // nothing to do
+            Log.d(TAG, "TrackingScreen: nothing to do")
+            return@LaunchedEffect
 
-
+        }
         // for points
         if (points.size == 1) {
             val single = points.first()
@@ -329,7 +334,7 @@ fun TrackingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        AppWithDrawer(viewModel) { drawerState, set ->
+        AppWithDrawer(viewModel, sharedViewModel) { drawerState, set ->
             selectedId = set as Set<Long>
             BottomSheetScaffold(
                 sheetPeekHeight = 40.dp,
@@ -481,7 +486,7 @@ fun TrackingScreen(
                         }
 
                         if (uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
-//                            Log.d(TAG, "TrackingScreen: is service started $isServiceStarted")
+                            Log.d(TAG, "TrackingScreen: is updating route points too")
                             Polyline(
                                 points = uiState.routePoints,
                                 startCap = RoundCap(),
@@ -494,6 +499,7 @@ fun TrackingScreen(
 //                        Log.d(TAG, "TrackingScreen: ${uiState.displayPolylines}")
 
                         uiState.displayPolylines.forEach {
+                            Log.d(TAG, "TrackingScreen: $it")
                             if (it.isEmpty()) return@forEach
                             Polyline(
                                 points = it,

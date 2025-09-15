@@ -1,4 +1,4 @@
-package com.example.geotracker.screen
+package com.example.geotracker.screen.viewmodel
 
 
 import android.Manifest
@@ -24,6 +24,7 @@ import com.example.geotracker.model.RoutePoint
 import com.example.geotracker.model.SatelliteInfo
 import com.example.geotracker.model.TrackingUiState
 import com.example.geotracker.repository.LocationRepository
+import com.example.geotracker.repository.SelectionManager
 import com.google.android.gms.maps.model.LatLng
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -45,7 +46,8 @@ class TrackingViewModel @Inject constructor(
     private val app: Application, // Hilt injects Application
     private val repo: LocationRepository,
     private val locationProvider: LocationProvider,
-    private val savedStateHandle: SavedStateHandle
+    private val savedStateHandle: SavedStateHandle,
+    private var selectionManager: SelectionManager
 ) : ViewModel() {
 
     private val shared = locationProvider.satelliteFlow()
@@ -99,9 +101,6 @@ class TrackingViewModel @Inject constructor(
     val isBoundFlow = _isBound.asStateFlow()
 
 
-    // backing mutable + public read-only selection flow
-    private val _selectedSessionId = MutableStateFlow<Set<Long?>>(emptySet())
-    val selectedSessionId: StateFlow<Set<Long?>> = _selectedSessionId.asStateFlow()
 
     private val _selectedPoint = MutableStateFlow<RoutePoint?>(null)
     val selectedPoint: StateFlow<RoutePoint?> = _selectedPoint
@@ -225,7 +224,6 @@ class TrackingViewModel @Inject constructor(
         viewModelScope.launch {
             uiState
                 .collectLatest { state ->
-
 //                Log.d("tanmay", "combined points: staste value $state")
                     val combined = listOf(state.routePoints)
                         .filter { it.isNotEmpty() } /*+
@@ -240,9 +238,16 @@ class TrackingViewModel @Inject constructor(
                     addRoutePointList(flatRoutePoints)
                 }
         }
+        viewModelScope.launch {
+            selectionManager.selectedSessionId.collectLatest {
+//                updateDisplayedPolylines(it)
+            }
+        }
     }
 
     private suspend fun updateDisplayedPolylines(current1: Set<Long?>) {
+        clearRoute()
+        Log.d(TAG, "updateDisplayedPolylines: $current1")
         val polylines = mutableListOf<List<LatLng>>()
         current1.forEach { sessionId ->
             // Assuming getSessionLocations returns Flow<List<LocationEntity>>
@@ -264,8 +269,17 @@ class TrackingViewModel @Inject constructor(
         }
 //        if (polylines.isEmpty()) return
         _uiState.update { it.copy(displayPolylines = polylines) }
+        Log.d(TAG, "updateDisplayedPolylines: ${uiState.value.displayPolylines}  \n " +
+                "route points ${uiState.value.routePoints} \n" +
+        "route points variable ${routePoints.value}")
     }
 
+    fun onSelectionToggles(sessionId: Long){
+        selectionManager.toggleSessionSelection(sessionId){
+            Log.d(TAG, "onSelectionToggles: $it")
+            updateDisplayedPolylines(it)
+        }
+    }
 
     fun onMapTapped(bestIndex: Int, distance: Double): Double {
 //        val response = findNearestRoutePointIndex(_routePoints.value, lat, lng)
@@ -296,24 +310,9 @@ class TrackingViewModel @Inject constructor(
     }
     fun clearSelectedPoint() { _selectedPoint.value = null }
 
-    /** Toggle selection: select id if not selected, otherwise clear selection. */
-    fun toggleSessionSelection(sessionId: Long) {
-        val newSelection = _selectedSessionId.value.toMutableSet().apply {
-            if (contains(sessionId)) remove(sessionId) else add(sessionId)
-        }.toSet()
-
-        viewModelScope.launch {
-            updateDisplayedPolylines(newSelection)   // use the future selection
-            _selectedSessionId.value = newSelection  // update state only after polylines updated
-        }
-    }
 
     /** Optional helper to explicitly select (useful when opening session programmatically). */
 
-    /** Optional helper to clear selection */
-    fun clearSelection() {
-        _selectedSessionId.value = emptySet()
-    }
 
 
     fun createSessionIfAbsent() {
@@ -325,9 +324,9 @@ class TrackingViewModel @Inject constructor(
         }
 
         locationProvider.stopUpdates()
-        clearSelection()
+        selectionManager.clearSelection()
         Log.d("tanmay", "createSessionIfAbsent: $sessionId")
-        toggleSessionSelection(_sessionId.value!!)
+        selectionManager.toggleSessionSelection(_sessionId.value!!)
         _uiState.value = TrackingUiState()
 
         Log.d("tanmay", "createSessionIfAbsent: ${sessionId.value}")
@@ -424,7 +423,7 @@ class TrackingViewModel @Inject constructor(
     }
 
 
-    fun openSessionBySessionId(sid: Long) {
+/*    fun openSessionBySessionId(sid: Long) {
         Log.d(TAG, "openSessionBySessionId: $sid")
         if (sid == _sessionId.value) return
 
@@ -444,7 +443,7 @@ class TrackingViewModel @Inject constructor(
             Log.d(TAG, "openSessionBySessionId: $locations    $detailedRoutePoint")
             addRoutePointList(detailedRoutePoint)
             if (!_selectedSessionId.value.contains(sid)) {
-                toggleSessionSelection(sid) // This will call updateDisplayedPolylines
+                sharedViewModel.toggleSessionSelection(sid) // This will call updateDisplayedPolylines
             } else {
                 // If already selected, updateDisplayedPolylines might still be needed
                 // if the data could have changed or to ensure consistency.
@@ -464,19 +463,20 @@ class TrackingViewModel @Inject constructor(
                 )
             }
         }
-    }
+    }*/
 
     fun sessionStopped() {
         _uiState.value = _uiState.value.copy(
-            sessionStartMs = 0
+            sessionStartMs = 0,
+            routePoints = emptyList()
         )
         setSessionId(null)
         lastLatLngForPolyline = null
+
     }
 
     fun deleteSession(sessionId: Long) {
         viewModelScope.launch {
-
             repo.deleteSession(sessionId)
         }
     }

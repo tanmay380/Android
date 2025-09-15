@@ -21,8 +21,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -30,11 +28,14 @@ import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import com.example.geotracker.screen.DetailsScreenViewModel
+import com.example.geotracker.screen.viewmodel.DetailsScreenViewModel
+import com.example.geotracker.screen.viewmodel.SharedViewModel
 
 @Composable
-fun DetailsScreen(modifier: Modifier = Modifier,
-                  viewModel: DetailsScreenViewModel = hiltViewModel()
+fun DetailsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: DetailsScreenViewModel = hiltViewModel(),
+    sharedViewModel: SharedViewModel
 ) {
     Scaffold(
         topBar = {},
@@ -236,5 +237,5 @@ private fun GeoFloatingActionButton() {
 @PreviewScreenSizes()
 @Composable
 fun GeoReportPreview() {
-    DetailsScreen()
+//    DetailsScreen()
 }

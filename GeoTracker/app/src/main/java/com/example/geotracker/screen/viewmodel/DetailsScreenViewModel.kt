@@ -1,4 +1,4 @@
-package com.example.geotracker.screen
+package com.example.geotracker.screen.viewmodel
 
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle

@@ -2,13 +2,7 @@ package com.example.geotracker
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.ComponentName
-import android.content.Context
-import android.content.Intent
-import android.content.ServiceConnection
 import android.os.Bundle
-import android.os.IBinder
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -19,27 +13,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.compose.rememberNavController
-import com.example.geotracker.screen.TrackingScreen
-import com.example.geotracker.screen.TrackingViewModel
-import com.example.geotracker.location.service.LocationService
+import com.example.geotracker.screen.viewmodel.TrackingViewModel
 import com.example.geotracker.navigation.GeoTrackerNavigation
 import com.example.geotracker.ui.theme.GeoTrackerTheme
-import com.example.geotracker.utils.Constants.PREFS
-import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
-import com.example.permissions.PermissionGateSequential
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.android.gms.maps.MapsInitializer
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 
 // MainActivity.kt (refactor)
 @AndroidEntryPoint
