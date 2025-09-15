@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -40,6 +41,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.collections.plus
 
 @HiltViewModel
 class TrackingViewModel @Inject constructor(
@@ -101,10 +103,8 @@ class TrackingViewModel @Inject constructor(
     val isBoundFlow = _isBound.asStateFlow()
 
 
-
     private val _selectedPoint = MutableStateFlow<RoutePoint?>(null)
     val selectedPoint: StateFlow<RoutePoint?> = _selectedPoint
-
 
 
     // ServiceConnection lives here
@@ -119,6 +119,8 @@ class TrackingViewModel @Inject constructor(
             // cancel any previous collector
             updatesJob?.cancel()
             updatesJob = viewModelScope.launch {
+                displayPolylineIndex = if (uiState.value.displayPolylines.size == 0) 0 else
+                    uiState.value.displayPolylines.size - 1
                 // simple continuous collect; you can debounce or transform if needed
                 boundService!!.locationEntityFlow.collect { entity ->
                     handleNewLocation(entity)
@@ -145,6 +147,13 @@ class TrackingViewModel @Inject constructor(
         ContextCompat.startForegroundService(app, intent)
         // bind with app context — will keep connection independent of Activity lifecycle
         app.bindService(intent, connection, Context.BIND_AUTO_CREATE)
+
+
+        createSessionIfAbsent()
+
+        pendingOrNow { svc ->
+            svc.startLocationUpdates(sessionId.value!!) }
+        selectionManager.toggleSessionSelection(_sessionId.value!!)
     }
 
     // Just bind (no startForegroundService) — useful if service already running
@@ -194,7 +203,8 @@ class TrackingViewModel @Inject constructor(
     fun addRoutePoint(point: RoutePoint) {
         _routePoints.update { it + point }
     }
-    fun addRoutePointList(list: List<RoutePoint>){
+
+    fun addRoutePointList(list: List<RoutePoint>) {
 //        Log.d(TAG, "addRoutePointList: ${_routePoints.value}    $list")
         _routePoints.update { it + list }
     }
@@ -247,7 +257,6 @@ class TrackingViewModel @Inject constructor(
 
     private suspend fun updateDisplayedPolylines(current1: Set<Long?>) {
         clearRoute()
-        Log.d(TAG, "updateDisplayedPolylines: $current1")
         val polylines = mutableListOf<List<LatLng>>()
         current1.forEach { sessionId ->
             // Assuming getSessionLocations returns Flow<List<LocationEntity>>
@@ -269,13 +278,15 @@ class TrackingViewModel @Inject constructor(
         }
 //        if (polylines.isEmpty()) return
         _uiState.update { it.copy(displayPolylines = polylines) }
-        Log.d(TAG, "updateDisplayedPolylines: ${uiState.value.displayPolylines}  \n " +
-                "route points ${uiState.value.routePoints} \n" +
-        "route points variable ${routePoints.value}")
+        Log.d(
+            TAG, "updateDisplayedPolylines: ${uiState.value.displayPolylines.size}  \n " +
+                    "route points ${uiState.value.routePoints.size} \n" +
+                    "route points variable ${routePoints.value.size}"
+        )
     }
 
-    fun onSelectionToggles(sessionId: Long){
-        selectionManager.toggleSessionSelection(sessionId){
+    fun onSelectionToggles(sessionId: Long) {
+        selectionManager.toggleSessionSelection(sessionId) {
             Log.d(TAG, "onSelectionToggles: $it")
             updateDisplayedPolylines(it)
         }
@@ -308,27 +319,27 @@ class TrackingViewModel @Inject constructor(
         }*/
         return 0.0
     }
-    fun clearSelectedPoint() { _selectedPoint.value = null }
+
+    fun clearSelectedPoint() {
+        _selectedPoint.value = null
+    }
 
 
     /** Optional helper to explicitly select (useful when opening session programmatically). */
-
 
 
     fun createSessionIfAbsent() {
         if (_sessionId.value == null) {
             val id = System.currentTimeMillis()
             _sessionId.value = id
-            savedStateHandle["sessionId"] = id
             _uiState.value = _uiState.value.copy(sessionStartMs = id)
         }
 
         locationProvider.stopUpdates()
         selectionManager.clearSelection()
         Log.d("tanmay", "createSessionIfAbsent: $sessionId")
-        selectionManager.toggleSessionSelection(_sessionId.value!!)
         _uiState.value = TrackingUiState()
-
+        clearRoute()
         Log.d("tanmay", "createSessionIfAbsent: ${sessionId.value}")
     }
     //1757617840252
@@ -346,9 +357,16 @@ class TrackingViewModel @Inject constructor(
                     accuracy = it.accuracy.toInt(),
                     speed = it.speed * 3.6
                 )
+                Log.d(
+                    TAG, "start getting location: ${uiState.value.displayPolylines.size}  \n " +
+                            "route points ${uiState.value.routePoints.size} \n" +
+                            "route points variable ${routePoints.value.size}")
             }
         }
     }
+
+
+    var displayPolylineIndex = 0
 
     fun handleNewLocation(entity: Location) {
 
@@ -413,65 +431,37 @@ class TrackingViewModel @Inject constructor(
         _uiState.update { cur ->
             val totalKm = cur.distance
             val avg = if (elapsedHours > 0) totalKm / elapsedHours else cur.avgSpeed
+
+
             cur.copy(
                 avgSpeed = avg,
                 speed = entity.speed * 3.6,
                 bearing = entity.bearing,
-                elevation = "${entity.altitude.toInt()}±${entity.mslAltitudeAccuracyMeters.toInt()}"
+                elevation = "${entity.altitude.toInt()}±${entity.mslAltitudeAccuracyMeters.toInt()}",
             )
         }
+
+        Log.d(TAG, "handleNewLocationupdate value: ${uiState.value.displayPolylines}")
     }
-
-
-/*    fun openSessionBySessionId(sid: Long) {
-        Log.d(TAG, "openSessionBySessionId: $sid")
-        if (sid == _sessionId.value) return
-
-        viewModelScope.launch {
-            val locations = repo.getSessionLocations(sid).first()
-            Log.d("tanmay", "openSession: ${locations.first()}")
-
-            val detailedRoutePoint = locations.map {
-                RoutePoint(
-                    lat = it.lat,
-                    lng = it.lng,
-                    speed = it.speed,
-                    timestamp = it.timestamp
-                )
-            }
-//            _routePoints.value = detailedRoutePoint
-            Log.d(TAG, "openSessionBySessionId: $locations    $detailedRoutePoint")
-            addRoutePointList(detailedRoutePoint)
-            if (!_selectedSessionId.value.contains(sid)) {
-                sharedViewModel.toggleSessionSelection(sid) // This will call updateDisplayedPolylines
-            } else {
-                // If already selected, updateDisplayedPolylines might still be needed
-                // if the data could have changed or to ensure consistency.
-                // However, toggleSessionSelection handles the update.
-            }
-            isFromIntent.value = true
-        }
-    }
-
-    fun clearRouteBySessionId(sId: Long) {
-        val locations = repo.getSessionLocations(sId)
-        viewModelScope.launch {
-            Log.d("tanmay", "openSession: ${locations.first().size}")
-            locations.first().forEach {
-                _uiState.value = _uiState.value.copy(
-                    routePoints = _uiState.value.routePoints - LatLng(it.lat, it.lng)
-                )
-            }
-        }
-    }*/
 
     fun sessionStopped() {
+        /*val updated = if (displayPolylineIndex in _uiState.value.displayPolylines.indices) {
+            cur.displayPolylines.mapIndexed { i, poly -> if (i == displayPolylineIndex) poly + newLL else poly }
+        } else {
+            // index missing -> append a new polyline containing newLL
+            cur.displayPolylines + listOf(listOf(newLL))
+        }*/
         _uiState.value = _uiState.value.copy(
             sessionStartMs = 0,
-            routePoints = emptyList()
+            displayPolylines = listOf(_uiState.value.routePoints) + uiState.value.displayPolylines,
+            routePoints = emptyList(),
         )
         setSessionId(null)
         lastLatLngForPolyline = null
+
+        unbindService()
+        stopService()
+        startGettingLocation()
 
     }
 

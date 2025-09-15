@@ -76,7 +76,7 @@ class LocationService : Service() {
     override fun onCreate() {
         super.onCreate()
         Log.d("tanmay", "onCreate: service created")
-
+        _isServiceRunning.value = true
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
     }

@@ -153,15 +153,10 @@ fun TrackingScreen(
     val onMyLocationClick = { viewModel.startGettingLocation() }
     val stopService = {
         viewModel.sessionStopped()
-        viewModel.unbindService()
-        viewModel.stopService()
 
     }
     val startOrStopService = {
         viewModel.startAndBindService()
-        viewModel.createSessionIfAbsent()
-
-        viewModel.pendingOrNow { svc -> svc.startLocationUpdates(viewModel.sessionId.value!!) }
     }
 
     val density = LocalDensity.current
@@ -187,12 +182,16 @@ fun TrackingScreen(
     }
 
     LaunchedEffect(selectedId) {
+        Log.d(TAG, "TrackingScreen: launched effedct seelcrd id $isServiceStarted   ${selectedId.size}")
         if (isServiceStarted && selectedId.size < 2) return@LaunchedEffect
         followMode = false
     }
 
     // While in follow mode, keep camera centered on each incoming location
     LaunchedEffect(followMode, isMapLoaded, myLocationClicked) {
+        Log.d(TAG, "TrackingScreen: $followMode value in launched effect")
+
+
         if (!followMode || !isMapLoaded) return@LaunchedEffect
 
         if (myLocationClicked) myLocationClicked = false
@@ -477,7 +476,7 @@ fun TrackingScreen(
 //                            Log.d(TAG, "TrackingScreen: nside isservice started check")
                             Marker(
                                 state = MarkerState(position = uiState.routePoints.last()),
-                                title = "Start",
+                                title = "END",
                                 icon = bitmapDescriptorFromVector(
                                     context,
                                     R.drawable.baseline_stop_circle_24
@@ -486,7 +485,7 @@ fun TrackingScreen(
                         }
 
                         if (uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
-                            Log.d(TAG, "TrackingScreen: is updating route points too")
+//                            Log.d(TAG, "TrackingScreen: is updating route points too")
                             Polyline(
                                 points = uiState.routePoints,
                                 startCap = RoundCap(),
@@ -499,7 +498,6 @@ fun TrackingScreen(
 //                        Log.d(TAG, "TrackingScreen: ${uiState.displayPolylines}")
 
                         uiState.displayPolylines.forEach {
-                            Log.d(TAG, "TrackingScreen: $it")
                             if (it.isEmpty()) return@forEach
                             Polyline(
                                 points = it,
