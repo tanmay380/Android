@@ -51,9 +51,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.geotracker.MainActivity.Companion.TAG
 import com.example.geotracker.R
-import com.example.geotracker.components.SessionSummary
+import com.example.geotracker.model.SessionSummary
 import com.example.geotracker.screen.viewmodel.SharedViewModel
-import com.example.geotracker.screen.viewmodel.TrackingViewModel
 import com.example.geotracker.utils.Utils.formatDuration
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -61,11 +60,11 @@ import java.util.Locale
 
 @Composable
 fun AppWithDrawer(
-    viewModel: TrackingViewModel,
     sharedViewModel: SharedViewModel,
-    content: @Composable (drawerState: DrawerState, selectedId: Set<Long?>) -> Unit
+    onSelectionToggle: (Set<Long>) -> Unit,
+    content: @Composable (drawerState: DrawerState) -> Unit
 ) {
-    val summaries by viewModel.sessionSummary.collectAsState()
+    val summaries by sharedViewModel.sessionSummary.collectAsState()
 //    Log.d("tanmay", "AppWithDrawer: $summaries")
     val selectedId by sharedViewModel.selectedSessionId.collectAsState()
 
@@ -127,10 +126,14 @@ fun AppWithDrawer(
                                     s,
                                     onClick = {
                                         // toggle selection and open the session (if you want both)
-                                        viewModel.onSelectionToggles(s.sessionId)
+                                        sharedViewModel.toggleSessionSelection(s.sessionId) {
+
+                                            Log.d(TAG, "SharedVM beforeCommit: $it")
+                                            onSelectionToggle(it)
+                                        }
                                     },
                                     isSelected = selectedId.contains(s.sessionId),
-                                    viewModel = viewModel
+                                    sharedViewModel = sharedViewModel
                                 )
                                 HorizontalDivider()
                             }
@@ -146,7 +149,7 @@ fun AppWithDrawer(
                             Button(
                                 onClick = {
                                     selectedId.forEach {
-                                        viewModel.deleteSession(it!!)
+                                        sharedViewModel.deleteSession(it!!)
                                     }
                                 },
                                 colors = ButtonDefaults.buttonColors(
@@ -169,7 +172,7 @@ fun AppWithDrawer(
         }
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            content(drawerState, selectedId)
+            content(drawerState)
         }
     }
 
@@ -181,7 +184,7 @@ private fun SessionRow(
     session: SessionSummary,
     isSelected: Boolean,
     onClick: () -> Unit,
-    viewModel: TrackingViewModel
+    sharedViewModel: SharedViewModel
 ) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
     val startStr = dateFormat.format(Date(session.startTimeMs))
@@ -241,7 +244,7 @@ private fun SessionRow(
                 Row {
                     IconButton(
                         modifier = Modifier.wrapContentWidth(),
-                        onClick = { viewModel.deleteSession(session.sessionId) }
+                        onClick = { sharedViewModel.deleteSession(session.sessionId) }
                     ) {
                         Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
                     }

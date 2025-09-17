@@ -16,7 +16,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.geotracker.components.SessionSummary
 import com.example.geotracker.location.provider.LocationProvider
 import com.example.geotracker.location.service.LocationService
 import com.example.geotracker.model.LocationEntity
@@ -32,16 +31,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.collections.plus
 
 @HiltViewModel
 class TrackingViewModel @Inject constructor(
@@ -65,11 +60,6 @@ class TrackingViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(TrackingUiState())
     val uiState: StateFlow<TrackingUiState> = _uiState
-
-    val sessionSummary: StateFlow<List<SessionSummary>> =
-        repo.getAllSessionSummariesFlow().map {
-            it
-        }.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     private var totalDistance = 0.0
     private var lastLatLng: LatLng? = null
@@ -141,6 +131,32 @@ class TrackingViewModel @Inject constructor(
         }
     }
 
+    init {
+        startGettingLocation()
+        viewModelScope.launch {
+            uiState
+                .collectLatest { state ->
+//                Log.d("tanmay", "combined points: staste value $state")
+                    val combined = listOf(state.routePoints)
+                        .filter { it.isNotEmpty() } /*+
+                            state.displayPolylines.filter { it.isNotEmpty() }*/
+
+                    val flatRoutePoints: List<RoutePoint> = combined
+                        .flatten()
+                        .map { latLng ->
+                            latLng.toRoutePoint(state.speed.toFloat(), System.currentTimeMillis())
+                        }
+
+                    addRoutePointList(flatRoutePoints)
+                }
+        }
+        viewModelScope.launch {
+            selectionManager.selectedSessionId.collectLatest {
+//                updateDisplayedPolylines(it)
+            }
+        }
+    }
+
     // Start and bind: uses application context → survives activity unbinds
     fun startAndBindService() {
         val intent = Intent(app, LocationService::class.java)
@@ -152,7 +168,8 @@ class TrackingViewModel @Inject constructor(
         createSessionIfAbsent()
 
         pendingOrNow { svc ->
-            svc.startLocationUpdates(sessionId.value!!) }
+            svc.startLocationUpdates(sessionId.value!!)
+        }
         selectionManager.toggleSessionSelection(_sessionId.value!!)
     }
 
@@ -229,40 +246,15 @@ class TrackingViewModel @Inject constructor(
 
     }
 
-    init {
-        startGettingLocation()
-        viewModelScope.launch {
-            uiState
-                .collectLatest { state ->
-//                Log.d("tanmay", "combined points: staste value $state")
-                    val combined = listOf(state.routePoints)
-                        .filter { it.isNotEmpty() } /*+
-                            state.displayPolylines.filter { it.isNotEmpty() }*/
-
-                    val flatRoutePoints: List<RoutePoint> = combined
-                        .flatten()
-                        .map { latLng ->
-                            latLng.toRoutePoint(state.speed.toFloat(), System.currentTimeMillis())
-                        }
-
-                    addRoutePointList(flatRoutePoints)
-                }
-        }
-        viewModelScope.launch {
-            selectionManager.selectedSessionId.collectLatest {
-//                updateDisplayedPolylines(it)
-            }
-        }
-    }
-
-    private suspend fun updateDisplayedPolylines(current1: Set<Long?>) {
+    suspend fun updateDisplayedPolylines(current1: Set<Long>) {
+        Log.d(TAG, "updateDisplayedPolylines: $current1")
         clearRoute()
         val polylines = mutableListOf<List<LatLng>>()
         current1.forEach { sessionId ->
             // Assuming getSessionLocations returns Flow<List<LocationEntity>>
             // and LocationEntity has lat, lng
             val locations =
-                repo.getSessionLocations(sessionId!!).first() // Collect the first emission
+                repo.getSessionLocationsList(sessionId) // Collect the first emission
             if (sessionId != _sessionId.value)
                 polylines.add(locations.map { LatLng(it.lat, it.lng) })
 
@@ -276,21 +268,25 @@ class TrackingViewModel @Inject constructor(
             }
             addRoutePointList(detailedRoutePoint)
         }
-//        if (polylines.isEmpty()) return
         _uiState.update { it.copy(displayPolylines = polylines) }
+//        if (polylines.isEmpty()) return
         Log.d(
             TAG, "updateDisplayedPolylines: ${uiState.value.displayPolylines.size}  \n " +
                     "route points ${uiState.value.routePoints.size} \n" +
                     "route points variable ${routePoints.value.size}"
         )
+
+
     }
 
-    fun onSelectionToggles(sessionId: Long) {
-        selectionManager.toggleSessionSelection(sessionId) {
-            Log.d(TAG, "onSelectionToggles: $it")
-            updateDisplayedPolylines(it)
+    /*
+        fun onSelectionToggles(sessionId: Long) {
+            selectionManager.toggleSessionSelection(sessionId) {
+                Log.d(TAG, "onSelectionToggles: $it")
+                updateDisplayedPolylines(it)
+            }
         }
-    }
+    */
 
     fun onMapTapped(bestIndex: Int, distance: Double): Double {
 //        val response = findNearestRoutePointIndex(_routePoints.value, lat, lng)
@@ -357,10 +353,10 @@ class TrackingViewModel @Inject constructor(
                     accuracy = it.accuracy.toInt(),
                     speed = it.speed * 3.6
                 )
-                Log.d(
+                /*Log.d(
                     TAG, "start getting location: ${uiState.value.displayPolylines.size}  \n " +
                             "route points ${uiState.value.routePoints.size} \n" +
-                            "route points variable ${routePoints.value.size}")
+                            "route points variable ${routePoints.value.size}")*/
             }
         }
     }
@@ -463,12 +459,6 @@ class TrackingViewModel @Inject constructor(
         stopService()
         startGettingLocation()
 
-    }
-
-    fun deleteSession(sessionId: Long) {
-        viewModelScope.launch {
-            repo.deleteSession(sessionId)
-        }
     }
 
 }

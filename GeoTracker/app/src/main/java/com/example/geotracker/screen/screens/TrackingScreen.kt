@@ -167,7 +167,7 @@ fun TrackingScreen(
     }
     var googleMapRef by remember { mutableStateOf<GoogleMap?>(null) }
 
-    var selectedId by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    val selectedId by sharedViewModel.selectedSessionId.collectAsStateWithLifecycle()
 
     // get screen size to compute padding dynamically
     val config = LocalConfiguration.current
@@ -177,12 +177,12 @@ fun TrackingScreen(
     LaunchedEffect(true) {
         if (isServiceStarted) {
             Log.d(TAG, "TrackingScreen: ${uiState.sessionStartMs}")
-            viewModel.onSelectionToggles(viewModel.sessionId.value!!)
+            sharedViewModel.toggleSessionSelection(viewModel.sessionId.value!!)
         }
+
     }
 
     LaunchedEffect(selectedId) {
-        Log.d(TAG, "TrackingScreen: launched effedct seelcrd id $isServiceStarted   ${selectedId.size}")
         if (isServiceStarted && selectedId.size < 2) return@LaunchedEffect
         followMode = false
     }
@@ -222,15 +222,12 @@ fun TrackingScreen(
 
     LaunchedEffect(isMapLoaded, selectedId) {
 
-        Log.d(TAG, "TrackingScreen: $selectedId")
-
         val points = routePoints
 
-//        Log.d(TAG, "TrackingScreen: $points")
+        Log.d(TAG, "TrackingScreen: launched effect ${points.size}")
         val maps = googleMapRef
 
-        if (!isMapLoaded || maps == null)
-        {
+        if (!isMapLoaded || maps == null) {
             Log.d(TAG, "TrackingScreen: not loaded")
             return@LaunchedEffect
         }
@@ -250,6 +247,7 @@ fun TrackingScreen(
             )
             return@LaunchedEffect
         }
+
 
         val builder = LatLngBounds.builder()
         points.forEach {
@@ -290,10 +288,6 @@ fun TrackingScreen(
         }
     }
 
-    // visual params
-    val bottomPaddingDp = 12.dp
-
-
     fun handleMapClick(
         clickLatLng: LatLng,
         polylines: List<RoutePoint>,     // your List<List<LatLng>>
@@ -333,8 +327,12 @@ fun TrackingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        AppWithDrawer(viewModel, sharedViewModel) { drawerState, set ->
-            selectedId = set as Set<Long>
+        AppWithDrawer(sharedViewModel, {
+            Log.d(TAG, "TrackingScreen: fuunction callsed")
+            scope.launch {
+                viewModel.updateDisplayedPolylines(it)
+            }
+        }) { drawerState ->
             BottomSheetScaffold(
                 sheetPeekHeight = 40.dp,
                 scaffoldState = state,
@@ -352,19 +350,12 @@ fun TrackingScreen(
                                 Row() {
                                     Button(
                                         onClick = {
-                                            navController.currentBackStackEntry?.savedStateHandle?.set("selectedId", selectedId)
+                                            navController.currentBackStackEntry?.savedStateHandle?.set(
+                                                "selectedId",
+                                                selectedId
+                                            )
                                             navController.navigate("Details Screen")
-
-// Debug dump (run after navigate or in the destination):
-                                            navController.currentBackStack.value.forEach { entry ->
-                                                Log.d("tanmay", "BACKQUEUE: route=${entry.destination.route}  id=${entry.id}  keys=${entry.savedStateHandle.keys()}")
-                                            }
-                                            Log.d("tanmay", "current route=${navController.currentBackStackEntry?.destination?.route}")
-                                            Log.d("tanmay", "previous route=${navController.previousBackStackEntry?.destination?.route}")
-                                            Log.d("tanmay", "current keys=${navController.currentBackStackEntry?.savedStateHandle?.keys()}")
-                                            Log.d("tanmay", "previous keys=${navController.previousBackStackEntry?.savedStateHandle?.keys()}")
-                                            Log.d(TAG, "TrackingScreen: ${selectedId.size}")
-    //                                            navController.navigate(DetailsScreenSelectedInfo(selectedId))
+                                            //                                            navController.navigate(DetailsScreenSelectedInfo(selectedId))
                                         },
                                         modifier = Modifier.padding(8.dp),
                                         shape = RoundedCornerShape(100.dp),

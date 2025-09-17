@@ -52,7 +52,8 @@ fun GeoTrackerNavigation(
             composable("Details Screen") {
                 val sharedViewModel: SharedViewModel = hiltViewModel()
                 DetailsScreen(
-                    sharedViewModel = sharedViewModel
+                    sharedViewModel = sharedViewModel,
+                    navController = navController
                 )
             }
         }
