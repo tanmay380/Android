@@ -2,6 +2,7 @@ package com.example.geotracker.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.google.android.gms.maps.model.LatLng
 import java.util.Date
 
 
@@ -14,4 +15,5 @@ data class LocationEntity(
     val speed: Float,
     val timestamp: Long
 ){
+    fun toLatLng() = LatLng(lat, lng)
 }

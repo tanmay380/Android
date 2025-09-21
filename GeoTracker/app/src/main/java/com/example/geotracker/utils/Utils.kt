@@ -9,6 +9,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import androidx.core.graphics.createBitmap
+import com.example.geotracker.MainActivity.Companion.TAG
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import java.time.Instant
@@ -30,6 +31,18 @@ object Utils {
         return sdf.format(date)
 
     }
+
+    fun logCaller(tag: String = "tanmay") {
+        val stackTrace = Throwable().stackTrace
+        Log.d(TAG, "logCaller: ${stackTrace.toList()}")
+        if (stackTrace.size >= 3) {
+            val caller = stackTrace[3] // [0] is Throwable, [1] is this function, [2] is the caller
+            android.util.Log.d(tag, "Called from: ${caller.className}.${caller.methodName} (${caller.fileName}:${caller.lineNumber})")
+        } else {
+            android.util.Log.d(tag, "Caller not found")
+        }
+    }
+
     fun formatDuration(ms: Long): String {
         val totalSec = (ms.coerceAtLeast(0)) / 1000
         val h = totalSec / 3600

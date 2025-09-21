@@ -24,6 +24,7 @@ class SharedViewModel @Inject constructor(private val selectionManager: Selectio
     // backing mutable + public read-only selection flow
 //    private val _selectedSessionId = MutableStateFlow<Set<Long?>>(emptySet())
     val selectedSessionId: StateFlow<Set<Long?>> = selectionManager.selectedSessionId
+    val runningSessinId: StateFlow<Long?> = selectionManager.runningSessionId
 
     val sessionSummary: StateFlow<List<SessionSummary>> =
         repo.getAllSessionSummariesFlow().map {
@@ -32,7 +33,7 @@ class SharedViewModel @Inject constructor(private val selectionManager: Selectio
 
 
     /** Toggle selection: select id if not selected, otherwise clear selection. */
-    fun toggleSessionSelection(sessionId: Long) {
+    suspend fun toggleSessionSelection(sessionId: Long) {
         selectionManager.toggleSessionSelection(sessionId)
     }
 

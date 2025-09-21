@@ -1,6 +1,7 @@
 package com.example.geotracker.repository
 
 import android.util.Log
+import com.example.geotracker.MainActivity.Companion.TAG
 import com.example.geotracker.dao.LocationDao
 import com.example.geotracker.helper.computeDistanceKm
 import com.example.geotracker.model.LocationEntity

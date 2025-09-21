@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.geotracker.MainActivity.Companion.TAG
 import com.example.geotracker.R
+import com.example.geotracker.components.ElapsedTimerText
 import com.example.geotracker.model.SessionSummary
 import com.example.geotracker.screen.viewmodel.SharedViewModel
 import com.example.geotracker.utils.Utils.formatDuration
@@ -61,12 +62,13 @@ import java.util.Locale
 @Composable
 fun AppWithDrawer(
     sharedViewModel: SharedViewModel,
-    onSelectionToggle: (Set<Long>) -> Unit,
+    onSelectionToggle: suspend (Set<Long>) -> Unit,
     content: @Composable (drawerState: DrawerState) -> Unit
 ) {
     val summaries by sharedViewModel.sessionSummary.collectAsState()
 //    Log.d("tanmay", "AppWithDrawer: $summaries")
     val selectedId by sharedViewModel.selectedSessionId.collectAsState()
+    val runningSessionId by sharedViewModel.runningSessinId.collectAsState()
 
     Log.d(TAG, "AppWithDrawer: $selectedId")
 
@@ -131,9 +133,11 @@ fun AppWithDrawer(
                                             Log.d(TAG, "SharedVM beforeCommit: $it")
                                             onSelectionToggle(it)
                                         }
+
                                     },
                                     isSelected = selectedId.contains(s.sessionId),
-                                    sharedViewModel = sharedViewModel
+                                    sharedViewModel = sharedViewModel,
+                                    runningSessionId = runningSessionId
                                 )
                                 HorizontalDivider()
                             }
@@ -184,12 +188,16 @@ private fun SessionRow(
     session: SessionSummary,
     isSelected: Boolean,
     onClick: () -> Unit,
-    sharedViewModel: SharedViewModel
+    sharedViewModel: SharedViewModel,
+    runningSessionId: Long?
 ) {
     val dateFormat = remember { SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()) }
     val startStr = dateFormat.format(Date(session.startTimeMs))
     val duration = formatDuration(session.durationMs)
     val distance = String.format(Locale.getDefault(), "%.2f km", session.distanceKm)
+    val elapsedTime by  ElapsedTimerText(session.startTimeMs)
+
+    val finalText = if (session.sessionId == runningSessionId) elapsedTime else duration
 
     Surface(
         color = if (isSelected)
@@ -218,7 +226,7 @@ private fun SessionRow(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "$distance • $duration",
+                        text = "$distance • $finalText",
                         style = typography.bodySmall,
                         color = colorScheme.onSurfaceVariant,
                         maxLines = 1,

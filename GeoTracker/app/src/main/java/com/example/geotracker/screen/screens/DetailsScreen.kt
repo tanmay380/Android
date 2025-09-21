@@ -67,6 +67,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.example.geotracker.MainActivity.Companion.TAG
+import com.example.geotracker.components.ElapsedTimerText
 import com.example.geotracker.screen.screens.AppWithDrawer
 import com.example.geotracker.screen.viewmodel.DetailsScreenViewModel
 import com.example.geotracker.screen.viewmodel.SharedViewModel
@@ -88,6 +89,8 @@ fun DetailsScreen(
     val selectedItems by
     sharedViewModel.selectedSessionId.collectAsStateWithLifecycle()
 
+    val runningSessionId by sharedViewModel.runningSessinId.collectAsStateWithLifecycle()
+
     val scope = rememberCoroutineScope()
 
     val selectedDetailedItems by viewModel.selectedSession.collectAsStateWithLifecycle()
@@ -102,7 +105,7 @@ fun DetailsScreen(
 
     AppWithDrawer(
         sharedViewModel,
-        {
+        onSelectionToggle = {
         }
     ) {drawerState ->
         Scaffold(topBar = {
@@ -114,7 +117,6 @@ fun DetailsScreen(
                                 onClick = {
 //                                    navController.navigate("Main Screen")
                                     navController.popBackStack()
-                                    //                                            navController.navigate(DetailsScreenSelectedInfo(selectedId))
                                 },
                                 modifier = Modifier.padding(8.dp),
                                 shape = RoundedCornerShape(100.dp),
@@ -176,6 +178,7 @@ fun DetailsScreen(
                                     String.format(Locale.getDefault(), "%.2f", it.distanceKm)
                                 val displayDistance =
                                     distance + if (it.distanceKm > 1000) " Km" else " m"
+
                                 MetricCard(
                                     title = displayDistance,
                                     subtitle = "TRACK LENGTH",
@@ -195,8 +198,11 @@ fun DetailsScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.Center
                             ) {
+                                val displayDuration by ElapsedTimerText(it.startTimeMs)
+                                Log.d(TAG, "DetailsScreen: ${(it.sessionId == runningSessionId)} + ${it.sessionId}  + $runningSessionId")
+                                val duration = if (it.sessionId == runningSessionId) displayDuration else formatDuration(it.durationMs)
                                 MetricCard(
-                                    title = formatDuration(it.durationMs),
+                                    title = duration,
                                     subtitle = "TRACK DURATION",
                                     modifier = Modifier.weight(1f)
                                 )

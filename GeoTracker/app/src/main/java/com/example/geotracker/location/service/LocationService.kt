@@ -6,6 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
@@ -17,10 +18,13 @@ import androidx.annotation.RequiresPermission
 import androidx.core.app.ActivityCompat
 import androidx.core.content.edit
 import com.example.geotracker.MainActivity
+import com.example.geotracker.MainActivity.Companion.TAG
 import com.example.geotracker.R
 import com.example.geotracker.model.LocationEntity
 import com.example.geotracker.repository.LocationRepository
 import com.example.geotracker.utils.Constants
+import com.example.geotracker.utils.Constants.PREFS
+import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
 import com.example.geotracker.utils.Utils
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -134,6 +138,11 @@ class LocationService : Service() {
             .edit {
                 putLong(Constants.PREF_ACTIVE_SESSION, currentSessionId!!)
             }
+        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val sidFromPrefs = prefs.getLong(PREF_ACTIVE_SESSION, -1L)
+
+        Log.d(TAG, "startLocationUpdates: $sidFromPrefs")
+
         fusedLocationClient.requestLocationUpdates(
             request,
             locationCallback,

@@ -3,7 +3,6 @@ package com.example.geotracker.navigation
 import DetailsScreen
 import android.Manifest
 import android.content.pm.PackageManager
-import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.app.ActivityCompat
@@ -12,7 +11,6 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navigation
-import com.example.geotracker.MainActivity.Companion.TAG
 import com.example.geotracker.screen.screens.TrackingScreen
 import com.example.geotracker.screen.viewmodel.SharedViewModel
 import com.example.geotracker.screen.viewmodel.TrackingViewModel
@@ -21,7 +19,9 @@ import com.example.permissions.PermissionGateSequential
 @Composable
 fun GeoTrackerNavigation(
     navController: NavHostController,
-    startDestination: String
+    startDestination: String,
+    viewModel: TrackingViewModel,
+    sharedViewModel: SharedViewModel
 ) {
     NavHost(
         navController,
@@ -33,8 +33,6 @@ fun GeoTrackerNavigation(
             startDestination
         ) {
             composable("Main Screen") {
-                val viewModel: TrackingViewModel = hiltViewModel()
-                val sharedViewModel: SharedViewModel = hiltViewModel()
                 PermissionGateSequential {
                     if (ActivityCompat.checkSelfPermission(
                             LocalContext.current,

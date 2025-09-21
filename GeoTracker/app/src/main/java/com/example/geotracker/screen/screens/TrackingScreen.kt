@@ -125,7 +125,7 @@ fun TrackingScreen(
     val selectedPointRoute by viewModel.selectedPoint.collectAsState()
 
     var followMode by remember {
-        mutableStateOf(true)
+        mutableStateOf(false)
     }
 
     var myLocationClicked by remember {
@@ -138,7 +138,6 @@ fun TrackingScreen(
     // Keep camera state stable across recompositions
     val cameraState = rememberCameraPositionState()
 
-
     // So the first fix snaps instantly, later fixes animate smoothly
     var firstFix by rememberSaveable { mutableStateOf(true) }
 
@@ -148,7 +147,7 @@ fun TrackingScreen(
     var isMapLoaded by remember { mutableStateOf(false) }
 
     val isServiceStarted by
-    LocationService.isServiceRunning.collectAsStateWithLifecycle(false)
+    LocationService.isServiceRunning.collectAsState(false)
 
     val onMyLocationClick = { viewModel.startGettingLocation() }
     val stopService = {
@@ -156,6 +155,7 @@ fun TrackingScreen(
 
     }
     val startOrStopService = {
+        viewModel.startAndBindService()
         viewModel.startAndBindService()
     }
 
@@ -167,34 +167,39 @@ fun TrackingScreen(
     }
     var googleMapRef by remember { mutableStateOf<GoogleMap?>(null) }
 
-    val selectedId by sharedViewModel.selectedSessionId.collectAsStateWithLifecycle()
+    val selectedIds by sharedViewModel.selectedSessionId.collectAsStateWithLifecycle()
 
     // get screen size to compute padding dynamically
     val config = LocalConfiguration.current
     val screenWidthPx = with(density) { config.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
+    
+    
+    LaunchedEffect(selectedIds) {
+        Log.d(TAG, "TrackingScreen: seleced id $selectedIds")
+    }
 
     LaunchedEffect(true) {
-        if (isServiceStarted) {
-            Log.d(TAG, "TrackingScreen: ${uiState.sessionStartMs}")
+        Log.d(TAG, "TrackingScreen launched effect true: $isServiceStarted   $selectedIds   ${viewModel.sessionId.value}")
+        if (isServiceStarted && !selectedIds.contains(viewModel.sessionId.value)) {
             sharedViewModel.toggleSessionSelection(viewModel.sessionId.value!!)
         }
 
     }
 
-    LaunchedEffect(selectedId) {
-        if (isServiceStarted && selectedId.size < 2) return@LaunchedEffect
+    LaunchedEffect(selectedIds) {
+        if (isServiceStarted && selectedIds.size < 2) return@LaunchedEffect
         followMode = false
     }
 
     // While in follow mode, keep camera centered on each incoming location
     LaunchedEffect(followMode, isMapLoaded, myLocationClicked) {
-        Log.d(TAG, "TrackingScreen: $followMode value in launched effect")
 
 
         if (!followMode || !isMapLoaded) return@LaunchedEffect
 
         if (myLocationClicked) myLocationClicked = false
+
 
         snapshotFlow { uiState.currentLatLng }
             .filter { it.latitude != 0.0 || it.longitude != 0.0 } // ignore no-fix
@@ -206,10 +211,11 @@ fun TrackingScreen(
             }
             .collectLatest { ll ->
                 if (!followMode) return@collectLatest
-                if ((!isServiceStarted && selectedId.isNotEmpty() && !followMode)) return@collectLatest
+                if ((!isServiceStarted && selectedIds.isNotEmpty() && !followMode)) return@collectLatest
 
                 if (firstFix) {
                     cameraState.move(CameraUpdateFactory.newLatLngZoom(ll, userZoom))
+                    followMode = true
                     firstFix = false
                 } else {
                     cameraState.animate(
@@ -220,18 +226,17 @@ fun TrackingScreen(
             }
     }
 
-    LaunchedEffect(isMapLoaded, selectedId) {
+    LaunchedEffect(isMapLoaded, selectedIds) {
 
         val points = routePoints
 
-        Log.d(TAG, "TrackingScreen: launched effect ${points.size}")
         val maps = googleMapRef
 
         if (!isMapLoaded || maps == null) {
             Log.d(TAG, "TrackingScreen: not loaded")
             return@LaunchedEffect
         }
-        if (points.isEmpty() || selectedId.isEmpty()) {
+        if (points.isEmpty() || selectedIds.isEmpty()) {
             // nothing to do
             Log.d(TAG, "TrackingScreen: nothing to do")
             return@LaunchedEffect
@@ -259,7 +264,6 @@ fun TrackingScreen(
 
 
         val paddingPx = (minOf(screenWidthPx, screenHeightPx) * 0.12f).toInt()
-        Log.d(TAG, "TrackingScreen: $bounds")
         maps.stopAnimation()
         maps.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, paddingPx))
 
@@ -327,11 +331,10 @@ fun TrackingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        AppWithDrawer(sharedViewModel, {
-            Log.d(TAG, "TrackingScreen: fuunction callsed")
-            scope.launch {
-                viewModel.updateDisplayedPolylines(it)
-            }
+        AppWithDrawer(sharedViewModel,
+            {
+            viewModel.updateDisplayedPolylines(it)
+
         }) { drawerState ->
             BottomSheetScaffold(
                 sheetPeekHeight = 40.dp,
@@ -352,7 +355,7 @@ fun TrackingScreen(
                                         onClick = {
                                             navController.currentBackStackEntry?.savedStateHandle?.set(
                                                 "selectedId",
-                                                selectedId
+                                                selectedIds
                                             )
                                             navController.navigate("Details Screen")
                                             //                                            navController.navigate(DetailsScreenSelectedInfo(selectedId))
@@ -422,7 +425,6 @@ fun TrackingScreen(
                             resetControlsTimer(scope)
                         },
                         onMapLongClick = { latLng ->
-//                            Log.d(TAG, "TrackingScreen: $routePoints")
                             handleMapClick(
                                 LatLng(latLng.latitude, latLng.longitude),
                                 routePoints,
@@ -450,8 +452,10 @@ fun TrackingScreen(
                             }
                         }
 
+//                        Log.d(TAG, "TrackingScreen: insde google map ${routePoints.size}")
+
                         //for start point
-                        if (uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
+                        if (uiState.routePoints.isNotEmpty() && selectedIds.isNotEmpty()) {
                             Marker(
                                 state = MarkerState(position = uiState.routePoints.first()),
                                 title = "Start",
@@ -462,8 +466,7 @@ fun TrackingScreen(
                             )
                         } //1757858959243
                         //for end point
-                        //for start point
-                        if (!isServiceStarted && uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
+                        if (!isServiceStarted && uiState.routePoints.isNotEmpty() && selectedIds.isNotEmpty()) {
 //                            Log.d(TAG, "TrackingScreen: nside isservice started check")
                             Marker(
                                 state = MarkerState(position = uiState.routePoints.last()),
@@ -475,8 +478,8 @@ fun TrackingScreen(
                             )
                         }
 
-                        if (uiState.routePoints.isNotEmpty() && selectedId.isNotEmpty()) {
-//                            Log.d(TAG, "TrackingScreen: is updating route points too")
+                        if (uiState.routePoints.isNotEmpty() && selectedIds.isNotEmpty()) {
+                            Log.d(TAG, "TrackingScreen: is updating route points too")
                             Polyline(
                                 points = uiState.routePoints,
                                 startCap = RoundCap(),
@@ -668,14 +671,14 @@ private fun FloatingControlsColumn(
 
         FloatingActionButton(
             onClick = {
+                // logging & toast are in click handler — OK here because it's not every compose
+                coroutineScope.launch {
+                    Toast.makeText(context, isServiceStarted.toString(), Toast.LENGTH_SHORT).show()
+                }
                 if (!isServiceStarted) {
                     startOrStopService()
                 } else {
                     stopService()
-                }
-                // logging & toast are in click handler — OK here because it's not every compose
-                coroutineScope.launch {
-                    Toast.makeText(context, "dfdfdf", Toast.LENGTH_SHORT).show()
                 }
             }
         ) {
@@ -701,6 +704,7 @@ fun BootomScaffoldSheetContent(
     val statelliteInfo = viewModel.satelliteState.collectAsState()
     val scope = rememberCoroutineScope()
 
+    val elapsedTimer by ElapsedTimerText(uiState.sessionStartMs)
     Box(
         modifier = Modifier
             .clickable(interactionSource = interactionSource, indication = null) {
@@ -747,7 +751,7 @@ fun BootomScaffoldSheetContent(
                         drawerState
                     )
                     StatColumn(
-                        ElapsedTimerText(uiState.sessionStartMs),
+                        elapsedTimer,
                         "DURATION",
                         weight = 1.3f, drawerState
                     )

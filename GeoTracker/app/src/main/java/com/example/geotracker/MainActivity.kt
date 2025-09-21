@@ -2,7 +2,9 @@ package com.example.geotracker
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
@@ -18,7 +20,10 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.compose.rememberNavController
 import com.example.geotracker.screen.viewmodel.TrackingViewModel
 import com.example.geotracker.navigation.GeoTrackerNavigation
+import com.example.geotracker.screen.viewmodel.SharedViewModel
 import com.example.geotracker.ui.theme.GeoTrackerTheme
+import com.example.geotracker.utils.Constants.PREFS
+import com.example.geotracker.utils.Constants.PREF_ACTIVE_SESSION
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.android.gms.maps.MapsInitializer
@@ -32,7 +37,8 @@ class MainActivity : ComponentActivity() {
         val TAG = "tanmay"
     }
 
-    private val viewModel: TrackingViewModel by viewModels()
+    val viewModel: TrackingViewModel by viewModels()
+    val sharedViewModel: SharedViewModel by viewModels()
    /* private var boundService: LocationService? = null
     private var isBound = false
     private var updatesJob: Job? = null
@@ -88,7 +94,9 @@ class MainActivity : ComponentActivity() {
             GeoTrackerTheme {
                 GeoTrackerNavigation(
                     rememberNavController(),
-                    "Main Screen Route"
+                    "Main Screen Route",
+                    viewModel,
+                    sharedViewModel
                 )
                 /*PermissionGateSequential {
 
@@ -149,47 +157,42 @@ class MainActivity : ComponentActivity() {
 //        }
 //    }
 //
-//    private fun handleIntentForSession(intent: Intent?) {
-//
-//        val sidFromIntent = intent?.getLongExtra("EXTRA_SESSION_ID", -1L) ?: -1L
-//        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-//        val sidFromPrefs = prefs.getLong(PREF_ACTIVE_SESSION, -1L)
-//
-//        Log.d(TAG, "handleIntentForSession: $sidFromPrefs   $sidFromIntent")
-//        val restoredSessionId = when {
-//            sidFromIntent > 0L -> sidFromIntent
-//            sidFromPrefs > 0L -> sidFromPrefs
-//            else -> -1L
-//        }
-//
-//        Log.d(TAG, "handleIntentForSession: $restoredSessionId")
-//
-//        if (restoredSessionId > 0L) {
-//            viewModel.setSessionId(restoredSessionId)
-//            viewModel.openSessionBySessionId(restoredSessionId)
-//            // ensure we bind so the viewModel starts receiving live updates from service
-//            startService() // optionally start/bind if you want to reattach
-//        } else {
-//            // no active session — viewModel stays without session until user starts one
-//        }
-//
-//    }
-//
-//    override fun onPause() {
-//        super.onPause()
-//        viewModel.unbindService()
-//    }
+    private fun handleIntentForSession() {
+
+        val prefs = applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val sidFromPrefs = prefs.getLong(PREF_ACTIVE_SESSION, -1L)
+
+        Log.d(TAG, "handleIntentForSession: $sidFromPrefs  " )
+        val restoredSessionId = when {
+            sidFromPrefs > 0L -> sidFromPrefs
+            else -> -1L
+        }
+
+        Log.d(TAG, "handleIntentForSession: $restoredSessionId")
+
+        if (restoredSessionId > 0L) {
+            viewModel.bindServiceOnly()
+            viewModel.openSessionBySessionId(restoredSessionId)
+        } else {
+            // no active session — viewModel stays without session until user starts one
+        }
+
+    }
+
+    override fun onStop() {
+        super.onStop()
+        viewModel.unbindService()
+    }
 
     // --- Lifecycle cleanup ---
     override fun onDestroy() {
         super.onDestroy()
-        viewModel.stopService()
+//        viewModel.stopService()
     }
 
     override fun onResume() {
         super.onResume()
-
-//        handleIntentForSession(intent)
+        handleIntentForSession()
     }
 
     // If you want reopen-from-notification to rebind (without auto-starting a new service):
