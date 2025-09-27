@@ -37,8 +37,8 @@ class MainActivity : ComponentActivity() {
         val TAG = "tanmay"
     }
 
-    val viewModel: TrackingViewModel by viewModels()
     val sharedViewModel: SharedViewModel by viewModels()
+    val viewModel: TrackingViewModel by viewModels()
    /* private var boundService: LocationService? = null
     private var isBound = false
     private var updatesJob: Job? = null

@@ -173,21 +173,30 @@ fun TrackingScreen(
     val config = LocalConfiguration.current
     val screenWidthPx = with(density) { config.screenWidthDp.dp.toPx() }
     val screenHeightPx = with(density) { config.screenHeightDp.dp.toPx() }
-    
-    
+
+
     LaunchedEffect(selectedIds) {
         Log.d(TAG, "TrackingScreen: seleced id $selectedIds")
     }
 
+/*
     LaunchedEffect(true) {
-        Log.d(TAG, "TrackingScreen launched effect true: $isServiceStarted   $selectedIds   ${viewModel.sessionId.value}")
+        Log.d(
+            TAG,
+            "TrackingScreen launched effect true: $isServiceStarted   $selectedIds   ${viewModel.sessionId.value}"
+        )
         if (isServiceStarted && !selectedIds.contains(viewModel.sessionId.value)) {
             sharedViewModel.toggleSessionSelection(viewModel.sessionId.value!!)
         }
 
     }
+*/
 
     LaunchedEffect(selectedIds) {
+        Log.d(TAG, "TrackingScreen: seelcted id value changed $selectedIds")
+        if (isServiceStarted && !selectedIds.contains(viewModel.sessionId.value)) {
+            sharedViewModel.toggleSessionSelection(viewModel.sessionId.value!!)
+        }
         if (isServiceStarted && selectedIds.size < 2) return@LaunchedEffect
         followMode = false
     }
@@ -331,11 +340,12 @@ fun TrackingScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        AppWithDrawer(sharedViewModel,
+        AppWithDrawer(
+            sharedViewModel,
             {
-            viewModel.updateDisplayedPolylines(it)
+                viewModel.updateDisplayedPolylines(it)
 
-        }) { drawerState ->
+            }) { drawerState ->
             BottomSheetScaffold(
                 sheetPeekHeight = 40.dp,
                 scaffoldState = state,

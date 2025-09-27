@@ -72,7 +72,7 @@ class LocationService : Service() {
     inner class LocalBinder : Binder() {
 
         fun getService(): LocationService {
-            Log.d("tanmay", "getService: ")
+            Log.d("tanmay", "   getService: ")
             return this@LocationService
         }
     }
